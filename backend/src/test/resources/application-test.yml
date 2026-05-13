@@ -1,0 +1,26 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:ailife;MODE=PostgreSQL;DB_CLOSE_DELAY=-1;DATABASE_TO_LOWER=TRUE
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.H2Dialect
+  flyway:
+    enabled: false
+  cache:
+    type: simple
+
+security:
+  jwt:
+    secret: change-this-dev-secret-change-this-dev-secret
+    expiration-minutes: 60
+
+openai:
+  api-key:
+  base-url: https://api.openai.com/v1
+  model: test-model
