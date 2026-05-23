@@ -36,6 +36,11 @@ public class CurrentUserService {
         return requirePrincipal().getId();
     }
 
+    public boolean hasRole(String roleName) {
+        return requirePrincipal().getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equals("ROLE_" + roleName) || a.getAuthority().equals(roleName));
+    }
+
     private UserPrincipal requirePrincipal() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null || !(authentication.getPrincipal() instanceof UserPrincipal)) {

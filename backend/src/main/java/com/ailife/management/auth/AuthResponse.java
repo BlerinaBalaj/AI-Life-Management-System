@@ -10,6 +10,7 @@ public class AuthResponse {
     private final String tokenType;
     private final Long userId;
     private final Long tenantId;
+    private final String tenantName;
     private final String email;
     private final String fullName;
     private final String role;

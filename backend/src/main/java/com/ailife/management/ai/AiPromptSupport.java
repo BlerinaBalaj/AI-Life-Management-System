@@ -47,7 +47,7 @@ final class AiPromptSupport {
             Map<String, Object> fallback = new LinkedHashMap<>();
             fallback.put("summary", StringUtils.hasText(summaryOverride)
                     ? summaryOverride
-                    : "Local AI fallback for " + requestType + ". Configure GEMINI_API_KEY or OPENAI_API_KEY for live AI responses.");
+                    : "Local AI fallback for " + requestType + ". Configure LLAMA_BASE_URL, LLAMA_MODEL, and LLAMA_API_KEY when your Llama endpoint requires a key.");
             fallback.put("recommendations", List.of(
                     "Review today's highest-priority goal.",
                     "Plan one focused work block and one recovery break.",

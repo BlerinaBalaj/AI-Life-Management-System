@@ -61,7 +61,7 @@ public class AiService {
         Map<String, Object> planBody = new LinkedHashMap<>();
         planBody.put("planDate", RequestReader.string(body, "planDate", LocalDate.now().toString()));
         planBody.put("title", "AI Daily Plan");
-        planBody.put("summary", ai.get("output"));
+        planBody.put("summary", displayText(ai.get("output")));
         planBody.put("aiGenerated", true);
         Map<String, Object> plan = planningService.createDailyPlan(planBody);
         ai.put("dailyPlan", plan);
@@ -73,7 +73,7 @@ public class AiService {
         Map<String, Object> ai = execute("WORKOUT_SUGGESTION", body, currentUserService.requireUser());
         Map<String, Object> planBody = new LinkedHashMap<>();
         planBody.put("title", "AI Workout Suggestion");
-        planBody.put("description", ai.get("output"));
+        planBody.put("description", displayText(ai.get("output")));
         planBody.put("difficulty", RequestReader.string(body, "difficulty", "BEGINNER"));
         planBody.put("daysPerWeek", RequestReader.integer(body, "daysPerWeek") == null ? 3 : RequestReader.integer(body, "daysPerWeek"));
         ai.put("workoutPlan", fitnessService.createWorkoutPlan(planBody, true));
@@ -85,7 +85,7 @@ public class AiService {
         Map<String, Object> ai = execute("NUTRITION_SUGGESTION", body, currentUserService.requireUser());
         Map<String, Object> planBody = new LinkedHashMap<>();
         planBody.put("title", "AI Nutrition Suggestion");
-        planBody.put("description", ai.get("output"));
+        planBody.put("description", displayText(ai.get("output")));
         planBody.put("dailyCalories", RequestReader.integer(body, "dailyCalories"));
         ai.put("nutritionPlan", nutritionService.createPlan(planBody, true));
         return ai;
@@ -274,6 +274,20 @@ public class AiService {
 
     private boolean isLocalFallbackOutput(String outputJson) {
         return outputJson != null && outputJson.contains("Local AI fallback");
+    }
+
+    private String displayText(Object output) {
+        String value = String.valueOf(output == null ? "" : output);
+        try {
+            Map<?, ?> parsed = objectMapper.readValue(value, Map.class);
+            Object summary = parsed.get("summary");
+            if (summary != null && !String.valueOf(summary).trim().isEmpty()) {
+                return String.valueOf(summary);
+            }
+        } catch (Exception ignored) {
+            // Keep the original value when it is already plain text.
+        }
+        return value;
     }
 
     private String hash(String value) {

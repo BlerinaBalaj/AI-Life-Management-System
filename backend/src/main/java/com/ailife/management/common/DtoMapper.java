@@ -35,6 +35,7 @@ public final class DtoMapper {
         dto.put("enabled", user.isEnabled());
         dto.put("role", user.getRole().getName().name());
         dto.put("tenantId", user.getTenant().getId());
+        dto.put("tenantName", user.getTenant().getName());
         return dto;
     }
 

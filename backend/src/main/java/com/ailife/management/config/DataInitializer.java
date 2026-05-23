@@ -14,6 +14,9 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Comparator;
+import java.util.List;
+
 @Component
 @RequiredArgsConstructor
 public class DataInitializer implements CommandLineRunner {
@@ -35,6 +38,8 @@ public class DataInitializer implements CommandLineRunner {
                 .orElseGet(() -> roleRepository.save(new Role(RoleName.USER)));
         Role adminRole = roleRepository.findByName(RoleName.ADMIN)
                 .orElseGet(() -> roleRepository.save(new Role(RoleName.ADMIN)));
+        Role superAdminRole = roleRepository.findByName(RoleName.SUPER_ADMIN)
+                .orElseGet(() -> roleRepository.save(new Role(RoleName.SUPER_ADMIN)));
 
         Tenant tenant = tenantRepository.findBySlug("system")
                 .orElseGet(() -> tenantRepository.save(new Tenant("System", "system")));
@@ -45,9 +50,35 @@ public class DataInitializer implements CommandLineRunner {
             admin.setEmail(adminEmail);
             admin.setFullName("System Administrator");
             admin.setPasswordHash(passwordEncoder.encode(adminPassword));
-            admin.setRole(adminRole);
+            admin.setRole(superAdminRole);
             admin.setEnabled(true);
             userRepository.save(admin);
+        } else {
+            userRepository.findByEmail(adminEmail).ifPresent(admin -> {
+                admin.setRole(superAdminRole);
+                admin.setEnabled(true);
+                userRepository.save(admin);
+            });
         }
+
+        tenantRepository.findAll().stream()
+                .filter(existingTenant -> !"system".equalsIgnoreCase(existingTenant.getSlug()))
+                .forEach(existingTenant -> ensureTenantAdmin(existingTenant, adminRole));
+    }
+
+    private void ensureTenantAdmin(Tenant tenant, Role adminRole) {
+        List<User> users = userRepository.findByTenantId(tenant.getId());
+        boolean hasAdmin = users.stream()
+                .anyMatch(user -> user.getRole() != null && user.getRole().getName() == RoleName.ADMIN);
+        if (hasAdmin || users.isEmpty()) {
+            return;
+        }
+
+        users.stream()
+                .min(Comparator.comparing(User::getId))
+                .ifPresent(firstUser -> {
+                    firstUser.setRole(adminRole);
+                    userRepository.save(firstUser);
+                });
     }
 }

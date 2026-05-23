@@ -27,7 +27,17 @@ public final class RequestReader {
         if (value instanceof Number) {
             return ((Number) value).intValue();
         }
-        return Integer.valueOf(String.valueOf(value));
+        String text = String.valueOf(value).trim();
+        if ("LOW".equalsIgnoreCase(text)) {
+            return 1;
+        }
+        if ("MEDIUM".equalsIgnoreCase(text)) {
+            return 2;
+        }
+        if ("HIGH".equalsIgnoreCase(text)) {
+            return 3;
+        }
+        return Integer.valueOf(text);
     }
 
     public static Double decimal(Map<String, Object> body, String key) {
