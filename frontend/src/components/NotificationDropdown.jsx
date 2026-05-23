@@ -35,11 +35,25 @@ export default function NotificationDropdown() {
   const ref = useRef(null);
 
   useEffect(() => {
-    api.getNotifications().then((d) => {
-      const data = d || [];
-      setItems(data);
-      setHasUnread(data.length > 0);
-    });
+    async function load() {
+      const notifications = await api.getNotifications();
+      if (notifications && notifications.length > 0) {
+        setItems(notifications);
+        setHasUnread(notifications.some((item) => !item.read));
+        return;
+      }
+
+      const [tasks, plans, sessions, moods] = await Promise.all([
+        api.getTasks(),
+        api.getDailyPlans(),
+        api.getWorkoutSessions(),
+        api.getMoodLogs(),
+      ]);
+      const generated = buildUserUpdates(tasks || [], plans || [], sessions || [], moods || []);
+      setItems(generated);
+      setHasUnread(generated.length > 0);
+    }
+    load();
   }, []);
 
   useEffect(() => {
@@ -105,4 +119,68 @@ export default function NotificationDropdown() {
       )}
     </div>
   );
+}
+
+function buildUserUpdates(tasks, plans, sessions, moods) {
+  const today = new Date();
+  const todayKey = today.toISOString().slice(0, 10);
+  const todoToday = tasks.filter((task) => task.status !== "DONE" && task.dueDate === todayKey);
+  const updates = [];
+
+  if (todoToday.length > 0) {
+    updates.push({
+      id: "today-tasks",
+      title: `${todoToday.length} task${todoToday.length === 1 ? "" : "s"} due today`,
+      message: todoToday.slice(0, 2).map((task) => task.title).join(", "),
+      time: "Today",
+      url: "/planner",
+      read: false,
+    });
+  }
+
+  if (plans.length > 0) {
+    updates.push({
+      id: "latest-plan",
+      title: "Latest daily plan ready",
+      message: plans[0].title || "Review your most recent plan.",
+      time: "Planner",
+      url: "/planner",
+      read: false,
+    });
+  }
+
+  if (sessions.length > 0) {
+    updates.push({
+      id: "movement-summary",
+      title: `${sessions.length} workout session${sessions.length === 1 ? "" : "s"} logged`,
+      message: "Open fitness to review your recent movement history.",
+      time: "Fitness",
+      url: "/fitness",
+      read: false,
+    });
+  }
+
+  if (moods.length > 0) {
+    updates.push({
+      id: "mood-summary",
+      title: "Mood history updated",
+      message: `${moods.length} mood log${moods.length === 1 ? "" : "s"} available for patterns.`,
+      time: "Mood",
+      url: "/mood",
+      read: false,
+    });
+  }
+
+  if (updates.length === 0) {
+    updates.push({
+      id: "start-tracking",
+      title: "Start your first daily signal",
+      message: "Add a task, log mood, or create a plan to build your dashboard.",
+      time: "Now",
+      url: "/planner",
+      read: false,
+    });
+  }
+
+  return updates.slice(0, 4);
 }
