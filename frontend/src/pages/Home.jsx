@@ -1,3 +1,4 @@
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   Apple,
@@ -7,6 +8,7 @@ import {
   HeartPulse,
   Sparkles,
 } from "lucide-react";
+import { api } from "../api/client.js";
 
 const visualCards = [
   {
@@ -39,6 +41,31 @@ const resetSteps = [
 ];
 
 export default function Home() {
+  const [tasks, setTasks] = useState([]);
+  const [sessions, setSessions] = useState([]);
+  const [moods, setMoods] = useState([]);
+
+  useEffect(() => {
+    api.getTasks().then((data) => setTasks(data || []));
+    api.getWorkoutSessions().then((data) => setSessions(data || []));
+    api.getMoodLogs().then((data) => setMoods(data || []));
+  }, []);
+
+  const pulse = useMemo(() => {
+    const done = tasks.filter((task) => task.status === "DONE").length;
+    const taskScore = tasks.length ? Math.round((done / tasks.length) * 40) : 12;
+    const workoutScore = Math.min(25, sessions.length * 8);
+    const moodAvg = moods.length
+      ? moods.reduce((sum, mood) => sum + (mood.moodScore || 0), 0) / moods.length
+      : 5;
+    const moodScore = Math.round((moodAvg / 10) * 35);
+    return Math.max(1, Math.min(100, taskScore + workoutScore + moodScore));
+  }, [moods, sessions, tasks]);
+
+  const doneTasks = tasks.filter((task) => task.status === "DONE").length;
+  const energy = sessions.length > 0 ? `${sessions.length} logged` : "not logged";
+  const moodLabel = moods[0]?.moodLabel || (moods.length ? `${moods.length} logs` : "no logs");
+
   return (
     <div className="home-page grid-stack">
       <section className="home-hero">
@@ -64,24 +91,24 @@ export default function Home() {
         <div className="life-pulse-visual">
           <div className="pulse-disc" />
           <div className="pulse-center">
-            <span>Today</span>
-            <strong>Balanced day</strong>
-            <p>Plan one priority, move your body, and close with a mood check.</p>
+            <span>Life pulse</span>
+            <strong>{pulse}%</strong>
+            <p>{tasks.length} tasks, {sessions.length} movement logs, {moods.length} mood notes.</p>
           </div>
           <div className="pulse-note pulse-focus">
             <CalendarCheck size={16} />
-            <span>Focus block</span>
-            <b>Choose one task that makes the day feel lighter.</b>
+            <span>Mind</span>
+            <b>{doneTasks} done</b>
           </div>
           <div className="pulse-note pulse-energy">
             <Dumbbell size={16} />
             <span>Energy</span>
-            <b>Log a workout, walk, or stretch to understand your patterns.</b>
+            <b>{energy}</b>
           </div>
           <div className="pulse-note pulse-reset">
             <HeartPulse size={16} />
-            <span>Reset</span>
-            <b>Write one honest mood note before the day ends.</b>
+            <span>Mood</span>
+            <b>{moodLabel}</b>
           </div>
         </div>
       </section>

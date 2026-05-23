@@ -7,7 +7,9 @@ import Fitness from "./pages/Fitness.jsx";
 import Nutrition from "./pages/Nutrition.jsx";
 import MoodStress from "./pages/MoodStress.jsx";
 import AIReports from "./pages/AIReports.jsx";
+import AdminUsers from "./pages/AdminUsers.jsx";
 import Layout from "./components/Layout.jsx";
+import AdminLayout from "./components/AdminLayout.jsx";
 import ProtectedRoute from "./components/ProtectedRoute.jsx";
 
 export default function App() {
@@ -16,7 +18,7 @@ export default function App() {
       <Route path="/login" element={<Login />} />
       <Route
         element={
-          <ProtectedRoute>
+          <ProtectedRoute userOnly>
             <Layout />
           </ProtectedRoute>
         }
@@ -30,6 +32,17 @@ export default function App() {
         <Route path="/nutrition" element={<Nutrition />} />
         <Route path="/mood" element={<MoodStress />} />
         <Route path="/reports" element={<AIReports />} />
+      </Route>
+      <Route
+        path="/admin"
+        element={
+          <ProtectedRoute adminOnly>
+            <AdminLayout />
+          </ProtectedRoute>
+        }
+      >
+        <Route index element={<Navigate to="/admin/users" replace />} />
+        <Route path="users" element={<AdminUsers />} />
       </Route>
       <Route path="*" element={<Navigate to="/home" replace />} />
     </Routes>

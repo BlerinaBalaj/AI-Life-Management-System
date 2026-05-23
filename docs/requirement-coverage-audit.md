@@ -29,7 +29,7 @@ This document maps every mandatory distributed-systems requirement to the real i
 | 13 | Project documentation | Implemented | `README.md`, `docs/architecture.md`, `docs/api-endpoints.md`, `docs/database-schema.md`, this audit document. |
 | 14 | Project management | Implemented | GitHub Projects/Jira-ready breakdown in `docs/project-management/task-breakdown.md`. |
 | 15 | Git and collaboration | Implemented | `.github/pull_request_template.md`, CI workflow, and `docs/git-collaboration.md`. |
-| 16 | OpenAI integration | Implemented | `OpenAiClient`, `AiService`, `/api/ai/chat`, `/api/ai/analyze-text`, daily plan, workout, nutrition, mood and weekly report endpoints. |
+| 16 | LLM integration | Implemented | `LlamaAiClient`, `AiService`, `/api/ai/chat`, `/api/ai/analyze-text`, daily plan, workout, nutrition, mood and weekly report endpoints. |
 | 17 | Caching | Implemented | Spring Cache with Redis configuration in `CacheConfig`; Redis service in `docker-compose.yml`; AI responses cached when an API key is configured. |
 | 18 | Async/background jobs | Implemented | `@EnableAsync`, `@EnableScheduling`, `AiBackgroundJob`, async weekly report generation and queued email notification service. |
 | 19 | Multi-tenancy | Implemented | `Tenant`, `TenantScopedEntity`, JWT tenant id, `CurrentUserService`, and tenant-aware repository queries. |

@@ -52,8 +52,9 @@ const WORKOUT_DETAILS = {
 
 function getWorkoutDetails(workout) {
   const key = (workout?.title || "").toLowerCase();
+  const description = readableAiText(workout?.description);
   return WORKOUT_DETAILS[key] || {
-    focus: workout?.description || "A balanced session built around movement, control and recovery.",
+    focus: description || "A balanced session built around movement, control and recovery.",
     intensity: workout?.difficulty || "Balanced",
     calories: Math.max(120, Math.round((workout?.duration || 30) * 7)),
     warmup: "5 min easy movement and joint mobility",
@@ -65,6 +66,36 @@ function getWorkoutDetails(workout) {
       { name: "Recovery stretch", work: "5 min", note: "Let heart rate come down." },
     ],
   };
+}
+
+function readableAiText(value) {
+  if (!value) return "";
+  if (typeof value !== "string") return String(value);
+  const trimmed = value.trim();
+  if (!trimmed.startsWith("{") && !trimmed.startsWith("[")) return value;
+  try {
+    const parsed = JSON.parse(trimmed);
+    if (parsed.summary) return parsed.summary;
+    if (Array.isArray(parsed.recommendations) && parsed.recommendations.length) {
+      return parsed.recommendations.join(" ");
+    }
+    if (Array.isArray(parsed.tasks) && parsed.tasks.length) {
+      return parsed.tasks.join(" ");
+    }
+  } catch {
+    return value;
+  }
+  return value;
+}
+
+function aiItems(value, key) {
+  if (!value || typeof value !== "string") return [];
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed[key]) ? parsed[key].filter(Boolean).slice(0, 3) : [];
+  } catch {
+    return [];
+  }
 }
 
 function formatSessionDate(value) {
@@ -128,7 +159,7 @@ export default function Fitness() {
       setAi(res.data);
     } catch (err) {
       setAi(isDemo() ? mockAIResponse : {
-        summary: apiErrorMessage(err, "AI workout suggestion failed. Check OPENAI_API_KEY and backend logs."),
+        summary: apiErrorMessage(err, "AI workout suggestion failed. Check LLAMA_BASE_URL, LLAMA_MODEL, LLAMA_API_KEY, and backend logs."),
         recommendations: [],
         tasks: [],
         insights: ["This is a real API error, not demo data."],
@@ -140,10 +171,13 @@ export default function Fitness() {
 
   const saveSession = async (e) => {
     e.preventDefault();
-    const local = { id: Date.now(), ...form };
-    setSessions((s) => [local, ...s]);
-    setShowLog(false);
-    try { await api.createWorkoutSession(local); } catch {}
+    try {
+      const res = await api.createWorkoutSession(form);
+      setSessions((s) => [res.data, ...s]);
+      setShowLog(false);
+    } catch (err) {
+      alert(apiErrorMessage(err, "Workout session could not be saved."));
+    }
   };
 
   const logSelectedPlan = (workout) => {
@@ -197,16 +231,7 @@ export default function Fitness() {
         {workouts.length === 0 ? <div className="empty">No workout plans yet.</div> : (
           <div className="grid-3">
             {workouts.map((w) => (
-              <button key={w.id} className="mini-card workout-plan-card" type="button" onClick={() => setSelectedPlan(w)}>
-                <div className="mini-icon"><Dumbbell size={18} /></div>
-                <strong>{w.title}</strong>
-                <p className="muted">{w.description}</p>
-                <div className="row gap">
-                  {w.difficulty && <span className="badge">{w.difficulty}</span>}
-                  {w.duration && <span className="badge badge-soft">{w.duration} min</span>}
-                </div>
-                <span className="plan-action"><PlayCircle size={14} /> View exercises</span>
-              </button>
+              <WorkoutPlanCard key={w.id} workout={w} onSelect={() => setSelectedPlan(w)} />
             ))}
           </div>
         )}
@@ -344,5 +369,30 @@ export default function Fitness() {
         </div>
       )}
     </div>
+  );
+}
+
+function WorkoutPlanCard({ workout, onSelect }) {
+  const recommendations = aiItems(workout.description, "recommendations");
+  const tasks = aiItems(workout.description, "tasks");
+  const cleanDescription = readableAiText(workout.description);
+
+  return (
+    <button className="mini-card workout-plan-card workout-ai-plan-card" type="button" onClick={onSelect}>
+      <div className="mini-icon"><Dumbbell size={18} /></div>
+      <strong>{workout.title}</strong>
+      <p className="muted">{cleanDescription}</p>
+      {(recommendations.length > 0 || tasks.length > 0) && (
+        <div className="workout-ai-points">
+          {recommendations.map((item, index) => <span key={`rec-${index}`}>{item}</span>)}
+          {tasks.map((item, index) => <span key={`task-${index}`}>{item}</span>)}
+        </div>
+      )}
+      <div className="row gap">
+        {workout.difficulty && <span className="badge">{workout.difficulty}</span>}
+        {workout.duration && <span className="badge badge-soft">{workout.duration} min</span>}
+      </div>
+      <span className="plan-action"><PlayCircle size={14} /> View exercises</span>
+    </button>
   );
 }

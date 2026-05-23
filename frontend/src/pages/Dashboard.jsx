@@ -36,11 +36,17 @@ export default function Dashboard() {
   const [goals, setGoals] = useState([]);
   const [tasks, setTasks] = useState([]);
   const [plans, setPlans] = useState([]);
+  const [sessions, setSessions] = useState([]);
+  const [moods, setMoods] = useState([]);
+  const [stress, setStress] = useState([]);
 
   useEffect(() => {
     api.getGoals().then((d) => setGoals(d || []));
     api.getTasks().then((d) => setTasks(d || []));
     api.getDailyPlans().then((d) => setPlans(d || []));
+    api.getWorkoutSessions().then((d) => setSessions(d || []));
+    api.getMoodLogs().then((d) => setMoods(d || []));
+    api.getStressLogs().then((d) => setStress(d || []));
   }, []);
 
   const stats = useMemo(() => {
@@ -59,8 +65,19 @@ export default function Dashboard() {
               return acc + p;
             }, 0) / goals.length
           );
-    return { totalGoals: goals.length, totalTasks: tasks.length, doneTasks: done, avg };
-  }, [goals, tasks]);
+    const avgMood = moods.length
+      ? moods.reduce((sum, mood) => sum + (mood.moodScore || 0), 0) / moods.length
+      : 0;
+    const avgStress = stress.length
+      ? stress.reduce((sum, item) => sum + (item.stressLevel || 0), 0) / stress.length
+      : 0;
+    const taskScore = tasks.length ? Math.round((done / tasks.length) * 40) : 0;
+    const bodyScore = Math.min(25, sessions.length * 8);
+    const moodScore = avgMood ? Math.round((avgMood / 10) * 25) : 0;
+    const stressScore = avgStress ? Math.max(0, 10 - Math.round(avgStress)) : 0;
+    const pulse = Math.max(0, Math.min(100, taskScore + bodyScore + moodScore + stressScore));
+    return { totalGoals: goals.length, totalTasks: tasks.length, doneTasks: done, avg, avgMood, avgStress, pulse };
+  }, [goals, moods, sessions, stress, tasks]);
 
   const taskPie = useMemo(() => {
     const counts = { DONE: 0, IN_PROGRESS: 0, TODO: 0 };
@@ -116,7 +133,7 @@ export default function Dashboard() {
         <div className="hero-visual">
           <div className="orbit-ring" />
           <div className="pulse-core">
-            <strong>{stats.avg || 87}%</strong>
+            <strong>{stats.pulse}%</strong>
             <span>life pulse</span>
           </div>
           <div className="floating-card card-a">
@@ -127,12 +144,12 @@ export default function Dashboard() {
           <div className="floating-card card-b">
             <Flame size={16} />
             <span>Body</span>
-            <b>active</b>
+            <b>{sessions.length ? `${sessions.length} sessions` : "no sessions"}</b>
           </div>
           <div className="floating-card card-c">
             <Activity size={16} />
             <span>Energy</span>
-            <b>steady</b>
+            <b>{stats.avgMood ? `${stats.avgMood.toFixed(1)}/10 mood` : "no mood logs"}</b>
           </div>
         </div>
       </section>
@@ -241,7 +258,7 @@ export default function Dashboard() {
               {taskPie.map((d) => (
                 <li key={d.name}>
                   <span className="dot" style={{ background: STATUS_COLORS[d.name] }} />
-                  {d.name.replace("_", " ")} <strong>{d.value}</strong>
+                  <span className="legend-label">{d.name.replace("_", " ")}</span> <strong>{d.value}</strong>
                 </li>
               ))}
             </ul>

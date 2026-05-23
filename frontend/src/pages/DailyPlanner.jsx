@@ -7,6 +7,8 @@
     const SUGGESTIONS = [
       "Drink water", "Study 30 minutes", "Walk 20 minutes", "Review goals",
       "10 minute meditation", "Prepare healthy lunch", "Plan tomorrow", "Stretch break",
+      "Write journal note", "Prepare workout clothes", "Read 10 pages", "Clean desk",
+      "Call a friend", "Meal prep snack", "Review budget", "Sleep routine",
     ];
 
     const COLUMNS = [
@@ -45,6 +47,13 @@
       };
     }
 
+    function priorityLabel(value) {
+      if (value === 1 || value === "1") return "LOW";
+      if (value === 2 || value === "2") return "MEDIUM";
+      if (value === 3 || value === "3") return "HIGH";
+      return value || "MEDIUM";
+    }
+
     export default function DailyPlanner() {
       const [plans, setPlans] = useState([]);
       const [tasks, setTasks] = useState([]);
@@ -71,20 +80,26 @@
 
       const savePlan = async (e) => {
         e.preventDefault();
-        const local = { id: Date.now(), ...planForm };
-        setPlans((p) => [local, ...p]);
-        setPlanForm({ title: "", planDate: planForm.planDate, summary: "" });
-        try { await api.createDailyPlan(local); } catch {}
+        try {
+          const res = await api.createDailyPlan(planForm);
+          setPlans((p) => [res.data, ...p]);
+          setPlanForm({ title: "", planDate: planForm.planDate, summary: "" });
+        } catch (err) {
+          alert(apiErrorMessage(err, "Daily plan could not be saved."));
+        }
       };
 
       const addTask = async (e) => {
         e.preventDefault();
         if (!taskForm.title.trim()) return;
-        const local = { id: Date.now(), ...taskForm };
-        setTasks((t) => [local, ...t]);
-        setTaskForm({ ...taskForm, title: "" });
-        setTaskModalOpen(false);
-        try { await api.createTask(local); } catch {}
+        try {
+          const res = await api.createTask(taskForm);
+          setTasks((t) => [res.data, ...t]);
+          setTaskForm({ ...taskForm, title: "" });
+          setTaskModalOpen(false);
+        } catch (err) {
+          alert(apiErrorMessage(err, "Task could not be saved."));
+        }
       };
 
       const updateStatus = async (task, status) => {
@@ -105,7 +120,7 @@
           setAiData(res.data);
         } catch (err) {
           setAiData(isDemo() ? mockAIResponse : {
-            summary: apiErrorMessage(err, "AI daily plan failed. Check OPENAI_API_KEY and backend logs."),
+            summary: apiErrorMessage(err, "AI daily plan failed. Check LLAMA_BASE_URL, LLAMA_MODEL, LLAMA_API_KEY, and backend logs."),
             recommendations: [],
             tasks: [],
             insights: ["This is a real API error, not demo data."],
@@ -142,7 +157,7 @@
                     <div key={t.id} className="task-item">
                       <div className="task-title">{t.title}</div>
                       <div className="task-meta">
-                        <span className={`badge pr-${t.priority}`}>{t.priority}</span>
+                        <span className={`badge pr-${priorityLabel(t.priority)}`}>{priorityLabel(t.priority)}</span>
                         {t.dueDate && <span className="muted">{new Date(t.dueDate).toLocaleDateString()}</span>}
                       </div>
                       <div className="row gap">
@@ -195,7 +210,7 @@
                     </label>
                     <label>Status
                       <select value={taskForm.status} onChange={(e) => setTaskForm({ ...taskForm, status: e.target.value })}>
-                        <option>TODO</option><option>IN_PROGRESS</option><option>DONE</option>
+                        <option value="TODO">TODO</option><option value="IN_PROGRESS">IN_PROGRESS</option><option value="DONE">DONE</option>
                       </select>
                     </label>
                   </div>

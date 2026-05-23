@@ -85,18 +85,24 @@ export default function MoodStress() {
 
   const saveMood = async (e) => {
     e.preventDefault();
-    const local = { id: Date.now(), ...moodForm, createdAt: new Date().toISOString() };
-    setMoods((m) => [local, ...m]);
-    setMoodForm({ ...moodForm, journalText: "" });
-    try { await api.createMoodLog(local); } catch {}
+    try {
+      const res = await api.createMoodLog({ ...moodForm, loggedAt: new Date().toISOString().slice(0, 16) });
+      setMoods((m) => [res.data, ...m]);
+      setMoodForm({ ...moodForm, journalText: "" });
+    } catch (err) {
+      alert(apiErrorMessage(err, "Mood log could not be saved."));
+    }
   };
 
   const saveStress = async (e) => {
     e.preventDefault();
-    const local = { id: Date.now(), ...stressForm, createdAt: new Date().toISOString() };
-    setStress((s) => [local, ...s]);
-    setStressForm({ ...stressForm, trigger: "", copingAction: "" });
-    try { await api.createStressLog(local); } catch {}
+    try {
+      const res = await api.createStressLog({ ...stressForm, loggedAt: new Date().toISOString().slice(0, 16) });
+      setStress((s) => [res.data, ...s]);
+      setStressForm({ ...stressForm, trigger: "", copingAction: "" });
+    } catch (err) {
+      alert(apiErrorMessage(err, "Stress log could not be saved."));
+    }
   };
 
   const analyzeMood = async () => {
@@ -107,7 +113,7 @@ export default function MoodStress() {
       setAi(res.data);
     } catch (err) {
       setAi(isDemo() ? mockAIResponse : {
-        summary: apiErrorMessage(err, "AI mood analysis failed. Check OPENAI_API_KEY and backend logs."),
+        summary: apiErrorMessage(err, "AI mood analysis failed. Check LLAMA_BASE_URL, LLAMA_MODEL, LLAMA_API_KEY, and backend logs."),
         recommendations: [],
         tasks: [],
         insights: ["This is a real API error, not demo data."],
@@ -240,7 +246,7 @@ export default function MoodStress() {
           {moods.length === 0 ? <div className="empty">No mood logs yet.</div> : (
             <div className="wellbeing-log-stack">
               {moods.map((m) => {
-                const date = formatLogDate(m.createdAt);
+                const date = formatLogDate(m.loggedAt || m.createdAt);
                 return (
                   <article key={m.id} className="wellbeing-log-card">
                     <div className="log-date-tile">
@@ -275,7 +281,7 @@ export default function MoodStress() {
           {stress.length === 0 ? <div className="empty">No stress logs yet.</div> : (
             <div className="wellbeing-log-stack">
               {stress.map((s) => {
-                const date = formatLogDate(s.createdAt);
+                const date = formatLogDate(s.loggedAt || s.createdAt);
                 const state = stressState(s.stressLevel);
                 return (
                   <article key={s.id} className="wellbeing-log-card stress-log-card">

@@ -143,7 +143,7 @@ export default function AIReports() {
       setChatResp(res.data);
     } catch (err) {
       setChatResp(isDemo() ? { ...mockAIResponse, summary: `On "${q}": ${mockAIResponse.summary}` } : {
-        summary: apiErrorMessage(err, "AI assistant request failed. Check OPENAI_API_KEY and backend logs."),
+        summary: apiErrorMessage(err, "AI assistant request failed. Check LLAMA_BASE_URL, LLAMA_MODEL, LLAMA_API_KEY, and backend logs."),
         recommendations: [],
         tasks: [],
         insights: ["This is a real API error, not demo data."],
@@ -164,7 +164,7 @@ export default function AIReports() {
         ...mockAIResponse,
         summary: "This week you completed 14 tasks, averaged a mood score of 6.5, and logged 3 workouts.",
       } : {
-        summary: apiErrorMessage(err, "AI weekly report failed. Check OPENAI_API_KEY and backend logs."),
+        summary: apiErrorMessage(err, "AI weekly report failed. Check LLAMA_BASE_URL, LLAMA_MODEL, LLAMA_API_KEY, and backend logs."),
         recommendations: [],
         tasks: [],
         insights: ["This is a real API error, not demo data."],

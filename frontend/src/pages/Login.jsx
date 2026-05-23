@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Leaf, Sparkles, ArrowRight, CheckCircle2 } from "lucide-react";
-import { useAuth } from "../context/AuthContext.jsx";
+import { isAdminRole, useAuth } from "../context/AuthContext.jsx";
 
 export default function Login() {
   const { login, register, loginAsDemo } = useAuth();
@@ -28,7 +28,7 @@ export default function Login() {
         : await register(form);
     setBusy(false);
     if (res.ok) {
-      nav("/home");
+      nav(isAdminRole(res.user?.role) ? "/admin/users" : "/home");
       return;
     }
     setMsg(res.message || "Could not sign in. Please check the backend and try again.");

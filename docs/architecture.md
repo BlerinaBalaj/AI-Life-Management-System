@@ -35,12 +35,21 @@ role
 
 The JWT filter sets authentication and tenant context for each request.
 
+Tenant isolation is enforced in four places:
+
+- Registration creates or resolves a tenant from `tenantName`; the first user in a tenant becomes `ADMIN`, later users become `USER`.
+- JWT tokens include `tenantId`; `JwtAuthenticationFilter` loads the user and stores the tenant id in `TenantContext` for the current request.
+- Repositories and services use tenant-aware queries such as `findByUserIdAndTenantId(...)` and `findByIdAndUserIdAndTenantId(...)`.
+- Admin endpoints are tenant-scoped: `ADMIN` can manage only users in their own tenant, while `SUPER_ADMIN` can manage users across all tenants.
+
+This means tenant A cannot list, update, search, or delete tenant B data through normal API flows. The regression test `RequirementApiTests.jwtRbacTenantIsolationAndSearchFilteringWorkTogether` verifies that tenant B cannot see tenant A tasks and that admin user listing stays inside the authenticated tenant.
+
 ## AI Module
 
-The frontend calls only the backend. The backend calls OpenAI:
+The frontend calls only the backend. The backend calls a Llama-compatible chat-completions endpoint:
 
 ```text
-React -> Spring Boot /api/ai/* -> OpenAI Responses API
+React -> Spring Boot /api/ai/* -> Llama chat-completions API
 ```
 
 AI input is structured with user goals, tasks, fitness history, nutrition history, mood logs, stress logs, and progress metrics. AI output is requested as structured JSON.

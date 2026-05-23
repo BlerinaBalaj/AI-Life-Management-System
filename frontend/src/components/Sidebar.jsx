@@ -9,6 +9,7 @@ import {
   Sparkles,
   LogOut,
   Leaf,
+  Shield,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext.jsx";
 
@@ -50,6 +51,12 @@ export default function Sidebar() {
             <span>{label}</span>
           </NavLink>
         ))}
+        {["ROLE_ADMIN", "ADMIN", "ROLE_SUPER_ADMIN", "SUPER_ADMIN"].includes(user?.role) && (
+          <NavLink to="/admin" className="nav-link" style={{ marginTop: "1rem", color: "var(--primary)" }}>
+            <Shield size={18} />
+            <span>Admin Panel</span>
+          </NavLink>
+        )}
       </nav>
 
       <div className="sidebar-footer">

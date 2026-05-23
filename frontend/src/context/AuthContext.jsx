@@ -3,6 +3,9 @@ import { api, apiErrorMessage } from "../api/client.js";
 
 const AuthContext = createContext(null);
 
+export const isAdminRole = (role) =>
+  ["ADMIN", "ROLE_ADMIN", "SUPER_ADMIN", "ROLE_SUPER_ADMIN"].includes(role);
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [token, setToken] = useState(localStorage.getItem("token") || localStorage.getItem("accessToken"));
@@ -40,13 +43,15 @@ export function AuthProvider({ children }) {
         usr = {
           id: res.data?.userId,
           tenantId: res.data?.tenantId,
+          tenantName: res.data?.tenantName,
           email: res.data?.email || email,
           fullName: res.data?.fullName || email.split("@")[0],
+          workspace: res.data?.tenantName,
           role: res.data?.role,
         };
       }
       persist(tok, usr);
-      return { ok: true };
+      return { ok: true, user: usr };
     } catch (e) {
       return { ok: false, message: apiErrorMessage(e, "Login failed. Check your email, password, and backend.") };
     }

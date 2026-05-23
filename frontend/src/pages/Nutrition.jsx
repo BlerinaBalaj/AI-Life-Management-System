@@ -158,7 +158,7 @@ export default function Nutrition() {
       setAi(res.data);
     } catch (err) {
       setAi(isDemo() ? mockAIResponse : {
-        summary: apiErrorMessage(err, "AI nutrition suggestion failed. Check OPENAI_API_KEY and backend logs."),
+        summary: apiErrorMessage(err, "AI nutrition suggestion failed. Check LLAMA_BASE_URL, LLAMA_MODEL, LLAMA_API_KEY, and backend logs."),
         recommendations: [],
         tasks: [],
         insights: ["This is a real API error, not demo data."],
@@ -170,10 +170,13 @@ export default function Nutrition() {
 
   const saveLog = async (e) => {
     e.preventDefault();
-    const local = { id: Date.now(), ...form };
-    setLogs((l) => [local, ...l]);
-    setShow(false);
-    try { await api.createFoodLog(local); } catch {}
+    try {
+      const res = await api.createFoodLog(form);
+      setLogs((l) => [res.data, ...l]);
+      setShow(false);
+    } catch (err) {
+      alert(apiErrorMessage(err, "Food log could not be saved."));
+    }
   };
 
   const chooseFood = (preset) => {
