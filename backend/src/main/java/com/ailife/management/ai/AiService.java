@@ -75,7 +75,8 @@ public class AiService {
         planBody.put("title", "AI Workout Suggestion");
         planBody.put("description", displayText(ai.get("output")));
         planBody.put("difficulty", RequestReader.string(body, "difficulty", "BEGINNER"));
-        planBody.put("daysPerWeek", RequestReader.integer(body, "daysPerWeek") == null ? 3 : RequestReader.integer(body, "daysPerWeek"));
+        Integer daysPerWeek = RequestReader.integer(body, "daysPerWeek");
+        planBody.put("daysPerWeek", daysPerWeek == null ? 3 : daysPerWeek);
         ai.put("workoutPlan", fitnessService.createWorkoutPlan(planBody, true));
         return ai;
     }

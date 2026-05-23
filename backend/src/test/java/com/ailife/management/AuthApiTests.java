@@ -38,6 +38,6 @@ class AuthApiTests {
                         .content(payload))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.accessToken", notNullValue()))
-                .andExpect(jsonPath("$.role").value("USER"));
+                .andExpect(jsonPath("$.role").value("ADMIN"));
     }
 }

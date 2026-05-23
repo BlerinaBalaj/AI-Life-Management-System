@@ -53,7 +53,7 @@ public final class RequestReader {
 
     public static Boolean bool(Map<String, Object> body, String key, boolean defaultValue) {
         Object value = body.get(key);
-        return value == null ? defaultValue : Boolean.valueOf(String.valueOf(value));
+        return value == null ? defaultValue : Boolean.parseBoolean(String.valueOf(value));
     }
 
     public static Long longValue(Map<String, Object> body, String key) {

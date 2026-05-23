@@ -34,7 +34,7 @@ public class DataInitializer implements CommandLineRunner {
     @Override
     @Transactional
     public void run(String... args) {
-        Role userRole = roleRepository.findByName(RoleName.USER)
+        roleRepository.findByName(RoleName.USER)
                 .orElseGet(() -> roleRepository.save(new Role(RoleName.USER)));
         Role adminRole = roleRepository.findByName(RoleName.ADMIN)
                 .orElseGet(() -> roleRepository.save(new Role(RoleName.ADMIN)));
