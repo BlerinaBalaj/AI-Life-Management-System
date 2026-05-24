@@ -50,6 +50,19 @@ const WORKOUT_DETAILS = {
   },
 };
 
+const STARTER_WORKOUTS = [
+  { id: "starter-strength", title: "Full Body Strength", description: "Compound lifts focused workout.", difficulty: "Intermediate", duration: 45 },
+  { id: "starter-hiit", title: "HIIT Cardio Burn", description: "20-minute high intensity intervals.", difficulty: "Advanced", duration: 20 },
+  { id: "starter-yoga", title: "Yoga Flow", description: "Relaxing vinyasa flow.", difficulty: "Beginner", duration: 30 },
+];
+
+const SESSION_SUGGESTIONS = [
+  STARTER_WORKOUTS[0],
+  STARTER_WORKOUTS[1],
+  STARTER_WORKOUTS[2],
+  { id: "starter-walk", title: "Brisk Walk", description: "Low-pressure outdoor cardio.", difficulty: "Beginner", duration: 25 },
+];
+
 function getWorkoutDetails(workout) {
   const key = (workout?.title || "").toLowerCase();
   const description = readableAiText(workout?.description);
@@ -125,6 +138,16 @@ function formatSessionDate(value) {
   };
 }
 
+function isToday(value) {
+  if (!value) return false;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return false;
+  const today = new Date();
+  return date.getFullYear() === today.getFullYear()
+    && date.getMonth() === today.getMonth()
+    && date.getDate() === today.getDate();
+}
+
 export default function Fitness() {
   const [workouts, setWorkouts] = useState([]);
   const [sessions, setSessions] = useState([]);
@@ -148,8 +171,32 @@ export default function Fitness() {
   const stats = useMemo(() => {
     const minutes = sessions.reduce((a, s) => a + (s.durationMinutes || 0), 0);
     const cals = sessions.reduce((a, s) => a + (s.caloriesBurned || 0), 0);
-    return { plans: workouts.length, sessions: sessions.length, minutes, cals };
+    return { plans: Math.max(workouts.length, STARTER_WORKOUTS.length), sessions: sessions.length, minutes, cals };
   }, [workouts, sessions]);
+
+  const todayStats = useMemo(() => {
+    const todaySessions = sessions.filter((session) => isToday(session.startedAt));
+    return {
+      sessions: todaySessions.length,
+      minutes: todaySessions.reduce((a, s) => a + (s.durationMinutes || 0), 0),
+      cals: todaySessions.reduce((a, s) => a + (s.caloriesBurned || 0), 0),
+    };
+  }, [sessions]);
+
+  const starterTitles = new Set(STARTER_WORKOUTS.map((workout) => workout.title.toLowerCase()));
+  const displayWorkouts = [
+    ...STARTER_WORKOUTS,
+    ...workouts.filter((workout) => !starterTitles.has(String(workout.title || "").toLowerCase())),
+  ];
+
+  const upsertWorkoutPlan = (plan) => {
+    if (!plan) return;
+    setWorkouts((current) => {
+      const exists = current.some((item) => item.id === plan.id);
+      if (exists) return current.map((item) => (item.id === plan.id ? plan : item));
+      return [plan, ...current];
+    });
+  };
 
   const askAI = async () => {
     setAiLoading(true);
@@ -157,6 +204,7 @@ export default function Fitness() {
       if (isDemo()) throw new Error("demo");
       const res = await api.aiWorkout({});
       setAi(res.data);
+      upsertWorkoutPlan(res.data?.workoutPlan);
     } catch (err) {
       setAi(isDemo() ? mockAIResponse : {
         summary: apiErrorMessage(err, "AI workout suggestion failed. Check LLAMA_BASE_URL, LLAMA_MODEL, LLAMA_API_KEY, and backend logs."),
@@ -183,6 +231,7 @@ export default function Fitness() {
   const logSelectedPlan = (workout) => {
     const details = getWorkoutDetails(workout);
     setForm({
+      workoutPlanId: typeof workout.id === "number" ? workout.id : undefined,
       workoutTitle: workout.title || "",
       startedAt: new Date().toISOString().slice(0, 16),
       durationMinutes: workout.duration || 30,
@@ -197,12 +246,34 @@ export default function Fitness() {
 
   return (
     <div className="grid-stack">
-      <div className="grid-4">
-        <StatCard icon={Dumbbell} label="Workout plans" value={stats.plans} accent="blue" />
-        <StatCard icon={Activity} label="Sessions" value={stats.sessions} accent="green" />
-        <StatCard icon={Clock} label="Total minutes" value={stats.minutes} accent="blue" />
-        <StatCard icon={Flame} label="Calories burned" value={stats.cals} accent="green" />
-      </div>
+      <section className="card daily-track-card">
+        <header className="card-head">
+          <div>
+            <h3>Today&apos;s workout track</h3>
+            <p className="muted">Resets each day and fills as you log sessions.</p>
+          </div>
+        </header>
+        <div className="grid-3 today-stats fitness-today-stats">
+          <StatCard icon={Activity} label="Today sessions" value={todayStats.sessions} accent="green" hint="Resets at midnight" />
+          <StatCard icon={Clock} label="Today minutes" value={todayStats.minutes} accent="blue" hint="Today's training time" />
+          <StatCard icon={Flame} label="Today calories" value={todayStats.cals} accent="green" hint="Today's burn" />
+        </div>
+      </section>
+
+      <section className="card all-time-panel">
+        <header className="card-head">
+          <div>
+            <h3>All-time fitness</h3>
+            <p className="muted">Your full training history, kept secondary to today.</p>
+          </div>
+        </header>
+        <div className="grid-4 all-time-stats fitness-all-stats">
+          <StatCard icon={Dumbbell} label="Workout plans" value={stats.plans} accent="blue" hint="Available library" />
+          <StatCard icon={Activity} label="All sessions" value={stats.sessions} accent="green" hint="Every logged session" />
+          <StatCard icon={Clock} label="All minutes" value={stats.minutes} accent="blue" hint="Total training time" />
+          <StatCard icon={Flame} label="All calories" value={stats.cals} accent="green" hint="Estimated total burn" />
+        </div>
+      </section>
 
       <section className="card row-between">
         <div>
@@ -219,7 +290,7 @@ export default function Fitness() {
         </div>
       </section>
 
-      {ai && <AIOutputCard data={ai} title="AI Workout Suggestion" />}
+      {ai && <AIOutputCard data={ai} title="AI Workout Suggestion" simple />}
 
       <section className="card workout-plan-section">
         <header className="card-head">
@@ -228,13 +299,11 @@ export default function Fitness() {
             <p className="muted">Click a plan to view exercises, then log it as today&apos;s session.</p>
           </div>
         </header>
-        {workouts.length === 0 ? <div className="empty">No workout plans yet.</div> : (
-          <div className="grid-3">
-            {workouts.map((w) => (
-              <WorkoutPlanCard key={w.id} workout={w} onSelect={() => setSelectedPlan(w)} />
-            ))}
-          </div>
-        )}
+        <div className="grid-3">
+          {displayWorkouts.map((w) => (
+            <WorkoutPlanCard key={w.id} workout={w} onSelect={() => setSelectedPlan(w)} />
+          ))}
+        </div>
       </section>
 
       <section className="card workout-session-section">
@@ -353,6 +422,21 @@ export default function Fitness() {
               </button>
             </header>
             <form className="form" onSubmit={saveSession}>
+              <div className="task-modal-suggestions">
+                <span>Quick picks</span>
+                <div className="chips">
+                  {SESSION_SUGGESTIONS.map((suggestion) => (
+                    <button
+                      key={suggestion.id}
+                      className="chip"
+                      type="button"
+                      onClick={() => logSelectedPlan(suggestion)}
+                    >
+                      {suggestion.title}
+                    </button>
+                  ))}
+                </div>
+              </div>
               <label>Workout name<input value={form.workoutTitle} onChange={(e) => setForm({ ...form, workoutTitle: e.target.value })} /></label>
               <label>Started at<input type="datetime-local" value={form.startedAt} onChange={(e) => setForm({ ...form, startedAt: e.target.value })} /></label>
               <div className="grid-2">
