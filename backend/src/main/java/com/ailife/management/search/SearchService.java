@@ -9,6 +9,7 @@ import com.ailife.management.planning.TaskRepository;
 import com.ailife.management.user.User;
 import com.ailife.management.wellbeing.MoodLogRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,45 +29,37 @@ public class SearchService {
     private final AIReportRepository aiReportRepository;
 
     @Transactional(readOnly = true)
+    @Cacheable(value = "searchTasks", key = "@currentUserService.userId() + ':' + @currentUserService.tenantId() + ':' + (#query ?: '') + ':' + (#status ?: 'ALL')")
     public List<Map<String, Object>> tasks(String query, String status) {
         User user = currentUserService.requireUser();
         String needle = normalize(query);
-        return taskRepository.findByUserIdAndTenantId(user.getId(), user.getTenant().getId()).stream()
-                .filter(task -> status == null || task.getStatus().equalsIgnoreCase(status))
-                .filter(task -> needle.isEmpty()
-                        || normalize(task.getTitle()).contains(needle)
-                        || normalize(task.getDescription()).contains(needle))
+        return taskRepository.searchByUserTenant(user.getId(), user.getTenant().getId(), needle, status).stream()
                 .map(DtoMapper::task)
                 .collect(Collectors.toList());
     }
 
     @Transactional(readOnly = true)
+    @Cacheable(value = "searchWorkouts", key = "@currentUserService.userId() + ':' + @currentUserService.tenantId() + ':' + (#query ?: '') + ':' + (#difficulty ?: 'ALL')")
     public List<Map<String, Object>> workouts(String query, String difficulty) {
         User user = currentUserService.requireUser();
         String needle = normalize(query);
-        return workoutPlanRepository.findByUserIdAndTenantId(user.getId(), user.getTenant().getId()).stream()
-                .filter(plan -> difficulty == null || plan.getDifficulty().equalsIgnoreCase(difficulty))
-                .filter(plan -> needle.isEmpty()
-                        || normalize(plan.getTitle()).contains(needle)
-                        || normalize(plan.getDescription()).contains(needle))
+        return workoutPlanRepository.searchByUserTenant(user.getId(), user.getTenant().getId(), needle, difficulty).stream()
                 .map(DtoMapper::workoutPlan)
                 .collect(Collectors.toList());
     }
 
     @Transactional(readOnly = true)
+    @Cacheable(value = "searchNutrition", key = "@currentUserService.userId() + ':' + @currentUserService.tenantId() + ':' + (#query ?: '') + ':' + (#maxCalories ?: 'MAX')")
     public List<Map<String, Object>> nutrition(String query, Integer maxCalories) {
         User user = currentUserService.requireUser();
         String needle = normalize(query);
-        return nutritionPlanRepository.findByUserIdAndTenantId(user.getId(), user.getTenant().getId()).stream()
-                .filter(plan -> maxCalories == null || plan.getDailyCalories() == null || plan.getDailyCalories() <= maxCalories)
-                .filter(plan -> needle.isEmpty()
-                        || normalize(plan.getTitle()).contains(needle)
-                        || normalize(plan.getDescription()).contains(needle))
+        return nutritionPlanRepository.searchByUserTenant(user.getId(), user.getTenant().getId(), needle, maxCalories).stream()
                 .map(DtoMapper::nutritionPlan)
                 .collect(Collectors.toList());
     }
 
     @Transactional(readOnly = true)
+    @Cacheable(value = "searchMoodLogs", key = "@currentUserService.userId() + ':' + @currentUserService.tenantId() + ':' + (#minScore ?: 'MIN')")
     public List<Map<String, Object>> moods(Integer minScore) {
         User user = currentUserService.requireUser();
         return moodLogRepository.findByUserIdAndTenantIdAndLoggedAtBetween(
@@ -78,10 +71,10 @@ public class SearchService {
     }
 
     @Transactional(readOnly = true)
+    @Cacheable(value = "searchAiReports", key = "@currentUserService.userId() + ':' + @currentUserService.tenantId() + ':' + (#type ?: 'ALL')")
     public List<Map<String, Object>> aiReports(String type) {
         User user = currentUserService.requireUser();
-        return aiReportRepository.findByUserIdAndTenantIdOrderByPeriodEndDesc(user.getId(), user.getTenant().getId()).stream()
-                .filter(report -> type == null || report.getReportType().equalsIgnoreCase(type))
+        return aiReportRepository.searchByUserTenant(user.getId(), user.getTenant().getId(), type).stream()
                 .map(DtoMapper::aiReport)
                 .collect(Collectors.toList());
     }

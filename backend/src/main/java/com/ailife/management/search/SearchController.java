@@ -2,6 +2,7 @@ package com.ailife.management.search;
 
 import io.swagger.v3.oas.annotations.Operation;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -13,6 +14,7 @@ import java.util.Map;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/search")
+@PreAuthorize("hasAnyRole('USER','ADMIN','SUPER_ADMIN')")
 public class SearchController {
     private final SearchService searchService;
 

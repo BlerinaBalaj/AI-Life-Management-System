@@ -24,7 +24,7 @@ public class WellbeingService {
     public List<Map<String, Object>> moodLogs(Integer minScore, Integer maxScore) {
         User user = currentUserService.requireUser();
         return moodLogRepository.findByUserIdAndTenantIdAndLoggedAtBetween(
-                        user.getId(), user.getTenant().getId(), LocalDateTime.now().minusDays(30), LocalDateTime.now().plusDays(1))
+                        user.getId(), user.getTenant().getId(), LocalDateTime.of(1970, 1, 1, 0, 0), LocalDateTime.now().plusDays(1))
                 .stream()
                 .filter(log -> minScore == null || log.getMoodScore() >= minScore)
                 .filter(log -> maxScore == null || log.getMoodScore() <= maxScore)
@@ -50,7 +50,7 @@ public class WellbeingService {
     public List<Map<String, Object>> stressLogs() {
         User user = currentUserService.requireUser();
         return stressLogRepository.findByUserIdAndTenantIdAndLoggedAtBetween(
-                        user.getId(), user.getTenant().getId(), LocalDateTime.now().minusDays(30), LocalDateTime.now().plusDays(1))
+                        user.getId(), user.getTenant().getId(), LocalDateTime.of(1970, 1, 1, 0, 0), LocalDateTime.now().plusDays(1))
                 .stream()
                 .map(DtoMapper::stressLog)
                 .collect(Collectors.toList());
