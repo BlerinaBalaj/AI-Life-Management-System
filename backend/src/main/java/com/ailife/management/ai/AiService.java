@@ -43,7 +43,20 @@ public class AiService {
     public Map<String, Object> chat(Map<String, Object> body) {
         User user = currentUserService.requireUser();
         AIConversation conversation = resolveConversation(user, RequestReader.longValue(body, "conversationId"));
-        saveMessage(user, conversation, "USER", RequestReader.string(body, "message", ""));
+        String message = RequestReader.string(body, "message", "");
+        saveMessage(user, conversation, "USER", message);
+        if (isSmallTalk(message)) {
+            Map<String, Object> response = new LinkedHashMap<>();
+            response.put("requestType", "CHATBOT");
+            response.put("provider", aiClient.getProvider());
+            response.put("model", aiClient.getModel());
+            response.put("live", false);
+            response.put("source", "local-small-talk");
+            response.put("output", casualChatOutput(message));
+            saveMessage(user, conversation, "AI", String.valueOf(response.get("output")));
+            response.put("conversation", DtoMapper.aiConversation(conversation));
+            return response;
+        }
         Map<String, Object> response = execute("CHATBOT", body, user);
         saveMessage(user, conversation, "AI", String.valueOf(response.get("output")));
         response.put("conversation", DtoMapper.aiConversation(conversation));
@@ -271,6 +284,22 @@ public class AiService {
                         || "WORKOUT_SUGGESTION".equals(requestType)
                         || "NUTRITION_SUGGESTION".equals(requestType)
         );
+    }
+
+    private boolean isSmallTalk(String message) {
+        if (message == null) {
+            return true;
+        }
+        String normalized = message.trim().toLowerCase();
+        return normalized.matches("^(hi|hello|hey|yo|sup|pershendetje|p[e\\u00EB]rsh[e\\u00EB]ndetje|tung|ckemi|\\u00E7kemi|qkemi|hey there)[!. ]*$");
+    }
+
+    private String casualChatOutput(String message) {
+        String normalized = message == null ? "" : message.trim().toLowerCase();
+        String summary = normalized.matches("^(hi|hello|hey|yo|sup|pershendetje|p[e\\u00EB]rsh[e\\u00EB]ndetje|tung|ckemi|\\u00E7kemi|qkemi|hey there)[!. ]*$")
+                ? "Hi. I'm here. We can talk normally, or you can ask me about your goals, tasks, mood, food, or workouts whenever you want."
+                : "Of course. We can just talk. What's on your mind?";
+        return "{\"summary\":\"" + summary.replace("\"", "\\\"") + "\",\"recommendations\":[],\"tasks\":[],\"insights\":[]}";
     }
 
     private boolean isLocalFallbackOutput(String outputJson) {

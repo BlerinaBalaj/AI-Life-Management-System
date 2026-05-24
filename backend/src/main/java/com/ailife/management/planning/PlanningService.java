@@ -6,6 +6,8 @@ import com.ailife.management.common.RequestReader;
 import com.ailife.management.exception.ResourceNotFoundException;
 import com.ailife.management.user.User;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -24,6 +26,7 @@ public class PlanningService {
     private final HabitLogRepository habitLogRepository;
 
     @Transactional(readOnly = true)
+    @Cacheable(value = "dailyPlans", key = "@currentUserService.userId() + ':' + @currentUserService.tenantId()")
     public List<Map<String, Object>> dailyPlans() {
         User user = currentUserService.requireUser();
         return dailyPlanRepository.findByUserIdAndTenantIdOrderByPlanDateDesc(user.getId(), user.getTenant().getId())
@@ -33,6 +36,7 @@ public class PlanningService {
     }
 
     @Transactional
+    @CacheEvict(value = {"dailyPlans", "tasks", "searchTasks"}, allEntries = true)
     public Map<String, Object> createDailyPlan(Map<String, Object> body) {
         User user = currentUserService.requireUser();
         DailyPlan plan = new DailyPlan();
@@ -45,7 +49,23 @@ public class PlanningService {
         return DtoMapper.dailyPlan(dailyPlanRepository.save(plan));
     }
 
+    @Transactional
+    @CacheEvict(value = {"dailyPlans", "tasks", "searchTasks"}, allEntries = true)
+    public Map<String, Object> updateDailyPlan(Long id, Map<String, Object> body) {
+        User user = currentUserService.requireUser();
+        DailyPlan plan = dailyPlanRepository.findByIdAndUserIdAndTenantId(id, user.getId(), user.getTenant().getId())
+                .orElseThrow(() -> new ResourceNotFoundException("Daily plan not found"));
+        if (RequestReader.date(body, "planDate") != null) {
+            plan.setPlanDate(RequestReader.date(body, "planDate"));
+        }
+        plan.setTitle(RequestReader.string(body, "title", plan.getTitle()));
+        plan.setSummary(RequestReader.string(body, "summary", plan.getSummary()));
+        plan.setAiGenerated(RequestReader.bool(body, "aiGenerated", plan.isAiGenerated()));
+        return DtoMapper.dailyPlan(dailyPlanRepository.save(plan));
+    }
+
     @Transactional(readOnly = true)
+    @Cacheable(value = "tasks", key = "@currentUserService.userId() + ':' + @currentUserService.tenantId() + ':' + (#status ?: 'ALL')")
     public List<Map<String, Object>> tasks(String status) {
         User user = currentUserService.requireUser();
         return taskRepository.findByUserIdAndTenantId(user.getId(), user.getTenant().getId())
@@ -56,6 +76,7 @@ public class PlanningService {
     }
 
     @Transactional
+    @CacheEvict(value = {"tasks", "searchTasks"}, allEntries = true)
     public Map<String, Object> createTask(Map<String, Object> body) {
         User user = currentUserService.requireUser();
         Task task = new Task();
@@ -66,6 +87,7 @@ public class PlanningService {
     }
 
     @Transactional
+    @CacheEvict(value = {"tasks", "searchTasks"}, allEntries = true)
     public Map<String, Object> updateTask(Long id, Map<String, Object> body) {
         User user = currentUserService.requireUser();
         Task task = taskRepository.findByIdAndUserIdAndTenantId(id, user.getId(), user.getTenant().getId())
@@ -75,6 +97,7 @@ public class PlanningService {
     }
 
     @Transactional
+    @CacheEvict(value = {"tasks", "searchTasks"}, allEntries = true)
     public void deleteTask(Long id) {
         User user = currentUserService.requireUser();
         Task task = taskRepository.findByIdAndUserIdAndTenantId(id, user.getId(), user.getTenant().getId())
@@ -83,6 +106,7 @@ public class PlanningService {
     }
 
     @Transactional(readOnly = true)
+    @Cacheable(value = "habits", key = "@currentUserService.userId() + ':' + @currentUserService.tenantId()")
     public List<Map<String, Object>> habits() {
         User user = currentUserService.requireUser();
         return habitRepository.findByUserIdAndTenantId(user.getId(), user.getTenant().getId())
@@ -92,6 +116,7 @@ public class PlanningService {
     }
 
     @Transactional
+    @CacheEvict(value = "habits", allEntries = true)
     public Map<String, Object> createHabit(Map<String, Object> body) {
         User user = currentUserService.requireUser();
         Habit habit = new Habit();
@@ -105,6 +130,7 @@ public class PlanningService {
     }
 
     @Transactional
+    @CacheEvict(value = "habits", allEntries = true)
     public Map<String, Object> logHabit(Long habitId, Map<String, Object> body) {
         User user = currentUserService.requireUser();
         Habit habit = habitRepository.findById(habitId)

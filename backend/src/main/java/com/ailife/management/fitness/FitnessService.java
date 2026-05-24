@@ -6,6 +6,8 @@ import com.ailife.management.common.RequestReader;
 import com.ailife.management.exception.ResourceNotFoundException;
 import com.ailife.management.user.User;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -22,6 +24,7 @@ public class FitnessService {
     private final WorkoutSessionRepository workoutSessionRepository;
 
     @Transactional(readOnly = true)
+    @Cacheable(value = "workoutPlans", key = "@currentUserService.userId() + ':' + @currentUserService.tenantId() + ':' + (#difficulty ?: 'ALL')")
     public List<Map<String, Object>> workoutPlans(String difficulty) {
         User user = currentUserService.requireUser();
         return workoutPlanRepository.findByUserIdAndTenantId(user.getId(), user.getTenant().getId())
@@ -32,6 +35,7 @@ public class FitnessService {
     }
 
     @Transactional
+    @CacheEvict(value = {"workoutPlans", "searchWorkouts"}, allEntries = true)
     public Map<String, Object> createWorkoutPlan(Map<String, Object> body, boolean aiGenerated) {
         User user = currentUserService.requireUser();
         WorkoutPlan plan = new WorkoutPlan();
@@ -47,6 +51,7 @@ public class FitnessService {
     }
 
     @Transactional
+    @CacheEvict(value = "workoutSessions", allEntries = true)
     public Map<String, Object> createWorkoutSession(Map<String, Object> body) {
         User user = currentUserService.requireUser();
         WorkoutSession session = new WorkoutSession();
@@ -67,9 +72,10 @@ public class FitnessService {
     }
 
     @Transactional(readOnly = true)
+    @Cacheable(value = "workoutSessions", key = "@currentUserService.userId() + ':' + @currentUserService.tenantId() + ':' + (#from ?: 'MIN') + ':' + (#to ?: 'MAX')")
     public List<Map<String, Object>> sessions(LocalDateTime from, LocalDateTime to) {
         User user = currentUserService.requireUser();
-        LocalDateTime start = from == null ? LocalDateTime.now().minusDays(30) : from;
+        LocalDateTime start = from == null ? LocalDateTime.of(1970, 1, 1, 0, 0) : from;
         LocalDateTime end = to == null ? LocalDateTime.now().plusDays(1) : to;
         return workoutSessionRepository.findByUserIdAndTenantIdAndStartedAtBetween(user.getId(), user.getTenant().getId(), start, end)
                 .stream()

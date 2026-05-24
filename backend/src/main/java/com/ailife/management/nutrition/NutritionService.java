@@ -5,6 +5,8 @@ import com.ailife.management.common.DtoMapper;
 import com.ailife.management.common.RequestReader;
 import com.ailife.management.user.User;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,6 +23,7 @@ public class NutritionService {
     private final FoodLogRepository foodLogRepository;
 
     @Transactional(readOnly = true)
+    @Cacheable(value = "nutritionPlans", key = "@currentUserService.userId() + ':' + @currentUserService.tenantId() + ':' + (#minCalories ?: 'MIN') + ':' + (#maxCalories ?: 'MAX')")
     public List<Map<String, Object>> plans(Integer minCalories, Integer maxCalories) {
         User user = currentUserService.requireUser();
         return nutritionPlanRepository.findByUserIdAndTenantId(user.getId(), user.getTenant().getId())
@@ -32,6 +35,7 @@ public class NutritionService {
     }
 
     @Transactional
+    @CacheEvict(value = {"nutritionPlans", "searchNutrition"}, allEntries = true)
     public Map<String, Object> createPlan(Map<String, Object> body, boolean aiGenerated) {
         User user = currentUserService.requireUser();
         NutritionPlan plan = new NutritionPlan();
@@ -48,6 +52,7 @@ public class NutritionService {
     }
 
     @Transactional
+    @CacheEvict(value = "foodLogs", allEntries = true)
     public Map<String, Object> createFoodLog(Map<String, Object> body) {
         User user = currentUserService.requireUser();
         FoodLog log = new FoodLog();
@@ -64,9 +69,10 @@ public class NutritionService {
     }
 
     @Transactional(readOnly = true)
+    @Cacheable(value = "foodLogs", key = "@currentUserService.userId() + ':' + @currentUserService.tenantId() + ':' + (#from ?: 'MIN') + ':' + (#to ?: 'MAX')")
     public List<Map<String, Object>> foodLogs(LocalDateTime from, LocalDateTime to) {
         User user = currentUserService.requireUser();
-        LocalDateTime start = from == null ? LocalDateTime.now().minusDays(7) : from;
+        LocalDateTime start = from == null ? LocalDateTime.of(1970, 1, 1, 0, 0) : from;
         LocalDateTime end = to == null ? LocalDateTime.now().plusDays(1) : to;
         return foodLogRepository.findByUserIdAndTenantIdAndConsumedAtBetween(user.getId(), user.getTenant().getId(), start, end)
                 .stream()
