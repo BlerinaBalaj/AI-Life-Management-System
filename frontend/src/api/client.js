@@ -137,7 +137,7 @@ export async function safeRequest(fn, mockKey) {
     return res.data;
   } catch (e) {
     console.warn(`[api] backend request failed for ${mockKey}:`, e?.message);
-    return readDemoStore()[mockKey] ?? (Array.isArray(mockData[mockKey]) ? [] : null);
+    return Array.isArray(mockData[mockKey]) ? [] : null;
   }
 }
 
@@ -160,8 +160,16 @@ export const api = {
   deleteTask: (id) => writableRequest(() => client.delete(`/tasks/${id}`), () => demoDelete("tasks", id)),
   getDailyPlans: () => safeRequest(() => client.get("/daily-plans"), "dailyPlans"),
   createDailyPlan: (p) => writableRequest(() => client.post("/daily-plans", p), () => demoCreate("dailyPlans", p)),
+  updateDailyPlan: (id, p) => writableRequest(() => client.put(`/daily-plans/${id}`, p), () => demoUpdate("dailyPlans", id, p)),
   getNotifications: () =>
     safeRequest(() => client.get("/notifications"), "notifications"),
+
+  // search / filtering
+  searchTasks: (params) => client.get("/search/tasks", { params }),
+  searchWorkouts: (params) => client.get("/search/workouts", { params }),
+  searchNutrition: (params) => client.get("/search/nutrition", { params }),
+  searchMoodLogs: (params) => client.get("/search/mood-logs", { params }),
+  searchAIReports: (params) => client.get("/search/ai-reports", { params }),
 
   // fitness
   getWorkouts: () => safeRequest(() => client.get("/workouts"), "workouts"),
