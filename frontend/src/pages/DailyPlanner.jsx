@@ -1,5 +1,5 @@
     import { useEffect, useState } from "react";
-    import { CalendarDays, Sparkles, Plus, Trash2, X } from "lucide-react";
+    import { CalendarDays, Sparkles, Plus, Trash2, X, Pencil, Search, SlidersHorizontal, RotateCcw } from "lucide-react";
     import { api, apiErrorMessage, isDemo } from "../api/client.js";
     import AIOutputCard from "../components/AIOutputCard.jsx";
     import { mockAIResponse } from "../api/mockData.js";
@@ -54,12 +54,27 @@
       return value || "MEDIUM";
     }
 
+    function filterTasksLocally(tasks, query, status) {
+      const needle = String(query || "").trim().toLowerCase();
+      return tasks.filter((task) => {
+        const matchesStatus = !status || task.status === status;
+        const haystack = `${task.title || ""} ${task.description || ""}`.toLowerCase();
+        const matchesQuery = !needle || haystack.includes(needle);
+        return matchesStatus && matchesQuery;
+      });
+    }
+
     export default function DailyPlanner() {
       const [plans, setPlans] = useState([]);
       const [tasks, setTasks] = useState([]);
+      const [allTasks, setAllTasks] = useState([]);
       const [aiData, setAiData] = useState(null);
       const [aiLoading, setAiLoading] = useState(false);
       const [taskModalOpen, setTaskModalOpen] = useState(false);
+      const [editingPlan, setEditingPlan] = useState(null);
+      const [filters, setFilters] = useState({ query: "", status: "ALL" });
+      const [filtering, setFiltering] = useState(false);
+      const [filterError, setFilterError] = useState("");
 
       const [planForm, setPlanForm] = useState({
         title: "",
@@ -72,11 +87,48 @@
         priority: "MEDIUM",
         status: "TODO",
       });
+      const [editForm, setEditForm] = useState({
+        title: "",
+        planDate: new Date().toISOString().slice(0, 10),
+        summary: "",
+      });
 
       useEffect(() => {
         api.getDailyPlans().then((d) => setPlans(d || []));
-        api.getTasks().then((d) => setTasks(d || []));
+        api.getTasks().then((d) => {
+          setAllTasks(d || []);
+          setTasks(d || []);
+        });
       }, []);
+
+      const applyFilters = async (e) => {
+        e?.preventDefault();
+        setFiltering(true);
+        setFilterError("");
+        const query = filters.query.trim();
+        const status = filters.status === "ALL" ? undefined : filters.status;
+        try {
+          if (isDemo()) {
+            setTasks(filterTasksLocally(allTasks, query, status));
+            return;
+          }
+          const res = await api.searchTasks({ query, status });
+          setTasks(res.data || []);
+        } catch (err) {
+          setFilterError(apiErrorMessage(err, "Filtering failed. Showing local task filter instead."));
+          setTasks(filterTasksLocally(allTasks, query, status));
+        } finally {
+          setFiltering(false);
+        }
+      };
+
+      const resetFilters = async () => {
+        setFilters({ query: "", status: "ALL" });
+        setFilterError("");
+        const allTasks = await api.getTasks();
+        setAllTasks(allTasks || []);
+        setTasks(allTasks || []);
+      };
 
       const savePlan = async (e) => {
         e.preventDefault();
@@ -89,11 +141,42 @@
         }
       };
 
+      const upsertPlan = (plan) => {
+        if (!plan) return;
+        setPlans((current) => {
+          const exists = current.some((item) => item.id === plan.id);
+          if (exists) return current.map((item) => (item.id === plan.id ? plan : item));
+          return [plan, ...current];
+        });
+      };
+
+      const openPlanEditor = (plan) => {
+        setEditingPlan(plan);
+        setEditForm({
+          title: plan.title || "",
+          planDate: String(plan.planDate || new Date().toISOString()).slice(0, 10),
+          summary: plan.summary || "",
+        });
+      };
+
+      const savePlanEdits = async (e) => {
+        e.preventDefault();
+        if (!editingPlan) return;
+        try {
+          const res = await api.updateDailyPlan(editingPlan.id, editForm);
+          upsertPlan(res.data);
+          setEditingPlan(null);
+        } catch (err) {
+          alert(apiErrorMessage(err, "Daily plan notes could not be saved."));
+        }
+      };
+
       const addTask = async (e) => {
         e.preventDefault();
         if (!taskForm.title.trim()) return;
         try {
           const res = await api.createTask(taskForm);
+          setAllTasks((t) => [res.data, ...t]);
           setTasks((t) => [res.data, ...t]);
           setTaskForm({ ...taskForm, title: "" });
           setTaskModalOpen(false);
@@ -103,11 +186,13 @@
       };
 
       const updateStatus = async (task, status) => {
+        setAllTasks((arr) => arr.map((x) => (x.id === task.id ? { ...x, status } : x)));
         setTasks((arr) => arr.map((x) => (x.id === task.id ? { ...x, status } : x)));
         try { await api.updateTask(task.id, { ...task, status }); } catch {}
       };
 
       const removeTask = async (task) => {
+        setAllTasks((arr) => arr.filter((x) => x.id !== task.id));
         setTasks((arr) => arr.filter((x) => x.id !== task.id));
         try { await api.deleteTask(task.id); } catch {}
       };
@@ -118,13 +203,26 @@
           if (isDemo()) throw new Error("demo");
           const res = await api.aiDailyPlan({ planDate: planForm.planDate, focus: planForm.summary || "balanced day" });
           setAiData(res.data);
+          upsertPlan(res.data?.dailyPlan);
         } catch (err) {
-          setAiData(isDemo() ? mockAIResponse : {
+          if (isDemo()) {
+            const demoPlan = {
+              title: "AI Daily Plan",
+              planDate: planForm.planDate,
+              summary: mockAIResponse.summary,
+              aiGenerated: true,
+            };
+            const saved = await api.createDailyPlan(demoPlan);
+            setAiData({ ...mockAIResponse, dailyPlan: saved.data });
+            upsertPlan(saved.data);
+          } else {
+            setAiData({
             summary: apiErrorMessage(err, "AI daily plan failed. Check LLAMA_BASE_URL, LLAMA_MODEL, LLAMA_API_KEY, and backend logs."),
             recommendations: [],
             tasks: [],
             insights: ["This is a real API error, not demo data."],
-          });
+            });
+          }
         } finally {
           setAiLoading(false);
         }
@@ -139,12 +237,45 @@
                 <p className="muted">Workflow view for today&apos;s priorities</p>
               </div>
               <div className="row gap">
-                <span className="badge badge-soft">{tasks.length} tasks</span>
+                <span className="badge badge-soft">{tasks.length} / {allTasks.length} tasks</span>
                 <button className="btn btn-primary" type="button" onClick={() => setTaskModalOpen(true)}>
                   <Plus size={14} /> Add task
                 </button>
               </div>
             </header>
+
+            <form className="filter-bar task-filter-bar" onSubmit={applyFilters}>
+              <label className="filter-search">
+                <Search size={15} />
+                <input
+                  value={filters.query}
+                  onChange={(e) => setFilters({ ...filters, query: e.target.value })}
+                  placeholder="Search task title or description"
+                />
+              </label>
+              <label className="filter-select">
+                <SlidersHorizontal size={15} />
+                <select value={filters.status} onChange={(e) => setFilters({ ...filters, status: e.target.value })}>
+                  <option value="ALL">All statuses</option>
+                  <option value="TODO">TODO</option>
+                  <option value="IN_PROGRESS">IN_PROGRESS</option>
+                  <option value="DONE">DONE</option>
+                </select>
+              </label>
+              <button className="btn btn-primary" type="submit" disabled={filtering}>
+                <Search size={14} /> {filtering ? "Filtering..." : "Apply filters"}
+              </button>
+              <button className="btn btn-ghost" type="button" onClick={resetFilters}>
+                <RotateCcw size={14} /> Reset
+              </button>
+            </form>
+            {(filters.query.trim() || filters.status !== "ALL") && (
+              <div className="active-filter-note">
+                Showing tasks matching {filters.query.trim() ? `"${filters.query.trim()}"` : "any text"} and {filters.status === "ALL" ? "any status" : filters.status}.
+              </div>
+            )}
+            {filterError && <div className="filter-error">{filterError}</div>}
+
             <div className="board">
               {COLUMNS.map((col) => (
                 <div key={col.id} className={`board-col board-${col.id.toLowerCase()}`}>
@@ -237,7 +368,12 @@
                         <div className="daily-plan-body">
                           <div className="daily-plan-top">
                             <strong>{p.title}</strong>
-                            <span><CalendarDays size={13} /> {date.label}</span>
+                            <div className="row gap">
+                              <span><CalendarDays size={13} /> {date.label}</span>
+                              <button className="btn-icon" type="button" onClick={() => openPlanEditor(p)} aria-label="Edit plan notes">
+                                <Pencil size={14} />
+                              </button>
+                            </div>
                           </div>
                           <p>{p.summary || "No notes yet. Add one focus, one movement habit, and one reset moment."}</p>
                         </div>
@@ -264,7 +400,29 @@
             </section>
           </div>
 
-          {aiData && <AIOutputCard data={aiData} title="AI Daily Plan" />}
+          {aiData && <AIOutputCard data={aiData} title="AI Daily Plan" simple />}
+
+          {editingPlan && (
+            <div className="modal-overlay" onClick={() => setEditingPlan(null)}>
+              <div className="modal task-modal" onClick={(e) => e.stopPropagation()}>
+                <header className="modal-head">
+                  <h3>Edit daily plan</h3>
+                  <button className="btn-icon" type="button" onClick={() => setEditingPlan(null)} aria-label="Close">
+                    <X size={16} />
+                  </button>
+                </header>
+                <form className="form" onSubmit={savePlanEdits}>
+                  <label>Title<input value={editForm.title} onChange={(e) => setEditForm({ ...editForm, title: e.target.value })} required /></label>
+                  <label>Date<input type="date" value={editForm.planDate} onChange={(e) => setEditForm({ ...editForm, planDate: e.target.value })} /></label>
+                  <label>Summary / notes<textarea rows="5" value={editForm.summary} onChange={(e) => setEditForm({ ...editForm, summary: e.target.value })} /></label>
+                  <div className="row gap">
+                    <button className="btn btn-primary" type="submit">Save Notes</button>
+                    <button className="btn btn-ghost" type="button" onClick={() => setEditingPlan(null)}>Cancel</button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
         </div>
       );
     }
