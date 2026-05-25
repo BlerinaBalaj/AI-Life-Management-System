@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
+  Building2,
   CheckCircle2,
   RefreshCcw,
   Search,
@@ -59,8 +60,26 @@ export default function AdminUsers() {
     const active = users.filter((user) => user.enabled !== false).length;
     const admins = users.filter((user) => isAdmin(user.role)).length;
     const suspended = users.length - active;
-    return { active, admins, suspended };
+    const workspaces = new Set(users.map((user) => user.tenantId || user.tenantName).filter(Boolean)).size;
+    return { active, admins, suspended, workspaces };
   }, [users]);
+
+  const workspaceGroups = useMemo(() => {
+    const groups = new Map();
+    visibleUsers.forEach((user) => {
+      const workspaceId = user.tenantId || user.tenantName || "unknown";
+      const workspaceName = user.tenantName || user.tenant?.name || `Workspace ${workspaceId}`;
+      if (!groups.has(workspaceId)) {
+        groups.set(workspaceId, {
+          id: workspaceId,
+          name: workspaceName,
+          users: [],
+        });
+      }
+      groups.get(workspaceId).users.push(user);
+    });
+    return Array.from(groups.values()).sort((a, b) => a.name.localeCompare(b.name));
+  }, [visibleUsers]);
 
   const handleChangeRole = async (id, currentRole) => {
     const newRole = isAdmin(currentRole) ? "USER" : "ADMIN";
@@ -95,6 +114,58 @@ export default function AdminUsers() {
     } catch (err) {
       alert(apiErrorMessage(err, "Failed to permanently delete user."));
     }
+  };
+
+  const renderUserRow = (user) => {
+    const self = user.id === currentUser?.id;
+    const enabled = user.enabled !== false;
+    return (
+      <tr key={user.id} className={!enabled ? "is-disabled" : ""}>
+        <td>
+          <div className="admin-user-cell">
+            <div className="admin-user-avatar">
+              {(user.fullName || user.email || "U").slice(0, 1).toUpperCase()}
+            </div>
+            <div>
+              <strong>{user.fullName || "Unnamed user"} {self && <em>You</em>}</strong>
+              <span>{user.email}</span>
+            </div>
+          </div>
+        </td>
+        <td>
+          <span className="admin-workspace">{user.tenantName || user.tenant?.name || `Tenant ${user.tenantId}`}</span>
+        </td>
+        <td>
+          <span className={`admin-role-pill ${isAdmin(user.role) ? "admin" : "user"}`}>
+            {isAdmin(user.role) ? <ShieldAlert size={13} /> : <ShieldCheck size={13} />}
+            {roleLabel(user.role)}
+          </span>
+        </td>
+        <td>
+          <span className={`admin-status-pill ${enabled ? "active" : "suspended"}`}>
+            {enabled ? "Active" : "Suspended"}
+          </span>
+        </td>
+        <td>
+          {!self && (
+            <div className={`admin-row-actions ${!enabled ? "suspended-actions" : ""}`}>
+              <button className="secondary" type="button" onClick={() => handleChangeRole(user.id, user.role)}>
+                <Shield size={14} />
+                Role
+              </button>
+              <button className={!enabled ? "primary-action" : "secondary"} type="button" onClick={() => handleToggleSuspend(user.id, enabled)}>
+                <UserX size={14} />
+                {enabled ? "Suspend" : "Activate"}
+              </button>
+              <button className="danger" type="button" onClick={() => handleHardDelete(user.id)}>
+                <Trash2 size={14} />
+                Delete
+              </button>
+            </div>
+          )}
+        </td>
+      </tr>
+    );
   };
 
   return (
@@ -135,9 +206,9 @@ export default function AdminUsers() {
           <strong>{stats.admins}</strong>
         </div>
         <div className="admin-stat">
-          <UserX size={18} />
-          <span>Suspended</span>
-          <strong>{stats.suspended}</strong>
+          {isSuperAdmin(currentUser?.role) ? <Building2 size={18} /> : <UserX size={18} />}
+          <span>{isSuperAdmin(currentUser?.role) ? "Workspaces" : "Suspended"}</span>
+          <strong>{isSuperAdmin(currentUser?.role) ? stats.workspaces : stats.suspended}</strong>
         </div>
       </section>
 
@@ -152,7 +223,10 @@ export default function AdminUsers() {
         <div className="admin-table-toolbar">
           <div>
             <h2>Registered users</h2>
-            <p>{visibleUsers.length} shown from {users.length} loaded</p>
+            <p>
+              {visibleUsers.length} shown from {users.length} loaded
+              {isSuperAdmin(currentUser?.role) && ` across ${workspaceGroups.length} workspace${workspaceGroups.length === 1 ? "" : "s"}`}
+            </p>
           </div>
           <label className="admin-search">
             <Search size={16} />
@@ -176,57 +250,22 @@ export default function AdminUsers() {
               </tr>
             </thead>
             <tbody>
-              {visibleUsers.map((user) => {
-                const self = user.id === currentUser?.id;
-                const enabled = user.enabled !== false;
-                return (
-                  <tr key={user.id} className={!enabled ? "is-disabled" : ""}>
-                    <td>
-                      <div className="admin-user-cell">
-                        <div className="admin-user-avatar">
-                          {(user.fullName || user.email || "U").slice(0, 1).toUpperCase()}
+              {isSuperAdmin(currentUser?.role)
+                ? workspaceGroups.flatMap((workspace) => [
+                    <tr key={`workspace-${workspace.id}`} className="admin-workspace-row">
+                      <td colSpan="5">
+                        <div className="admin-workspace-heading">
+                          <span>
+                            <Building2 size={15} />
+                            {workspace.name}
+                          </span>
+                          <strong>{workspace.users.length} user{workspace.users.length === 1 ? "" : "s"}</strong>
                         </div>
-                        <div>
-                          <strong>{user.fullName || "Unnamed user"} {self && <em>You</em>}</strong>
-                          <span>{user.email}</span>
-                        </div>
-                      </div>
-                    </td>
-                    <td>
-                      <span className="admin-workspace">{user.tenantName || user.tenant?.name || `Tenant ${user.tenantId}`}</span>
-                    </td>
-                    <td>
-                      <span className={`admin-role-pill ${isAdmin(user.role) ? "admin" : "user"}`}>
-                        {isAdmin(user.role) ? <ShieldAlert size={13} /> : <ShieldCheck size={13} />}
-                        {roleLabel(user.role)}
-                      </span>
-                    </td>
-                    <td>
-                      <span className={`admin-status-pill ${enabled ? "active" : "suspended"}`}>
-                        {enabled ? "Active" : "Suspended"}
-                      </span>
-                    </td>
-                    <td>
-                      {!self && (
-                        <div className={`admin-row-actions ${!enabled ? "suspended-actions" : ""}`}>
-                          <button className="secondary" type="button" onClick={() => handleChangeRole(user.id, user.role)}>
-                            <Shield size={14} />
-                            Role
-                          </button>
-                          <button className={!enabled ? "primary-action" : "secondary"} type="button" onClick={() => handleToggleSuspend(user.id, enabled)}>
-                            <UserX size={14} />
-                            {enabled ? "Suspend" : "Activate"}
-                          </button>
-                          <button className="danger" type="button" onClick={() => handleHardDelete(user.id)}>
-                            <Trash2 size={14} />
-                            Delete
-                          </button>
-                        </div>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
+                      </td>
+                    </tr>,
+                    ...workspace.users.map(renderUserRow),
+                  ])
+                : visibleUsers.map(renderUserRow)}
               {!loading && visibleUsers.length === 0 && (
                 <tr>
                   <td colSpan="5">
