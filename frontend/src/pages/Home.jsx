@@ -52,14 +52,17 @@ export default function Home() {
   }, []);
 
   const pulse = useMemo(() => {
+    const hasActivity = tasks.length > 0 || sessions.length > 0 || moods.length > 0;
+    if (!hasActivity) return 0;
+
     const done = tasks.filter((task) => task.status === "DONE").length;
-    const taskScore = tasks.length ? Math.round((done / tasks.length) * 40) : 12;
+    const taskScore = tasks.length ? Math.round((done / tasks.length) * 40) : 0;
     const workoutScore = Math.min(25, sessions.length * 8);
     const moodAvg = moods.length
       ? moods.reduce((sum, mood) => sum + (mood.moodScore || 0), 0) / moods.length
-      : 5;
-    const moodScore = Math.round((moodAvg / 10) * 35);
-    return Math.max(1, Math.min(100, taskScore + workoutScore + moodScore));
+      : 0;
+    const moodScore = moods.length ? Math.round((moodAvg / 10) * 35) : 0;
+    return Math.min(100, taskScore + workoutScore + moodScore);
   }, [moods, sessions, tasks]);
 
   const doneTasks = tasks.filter((task) => task.status === "DONE").length;
@@ -93,7 +96,7 @@ export default function Home() {
           <div className="pulse-center">
             <span>Life pulse</span>
             <strong>{pulse}%</strong>
-            <p>{tasks.length} tasks, {sessions.length} movement logs, {moods.length} mood notes.</p>
+            <p>{pulse ? `${tasks.length} tasks, ${sessions.length} movement logs, ${moods.length} mood notes.` : "Start logging to build your pulse."}</p>
           </div>
           <div className="pulse-note pulse-focus">
             <CalendarCheck size={16} />

@@ -1,5 +1,12 @@
 server:
   port: ${SERVER_PORT:8080}
+  forward-headers-strategy: framework
+  ssl:
+    enabled: ${SERVER_SSL_ENABLED:false}
+    key-store: ${SERVER_SSL_KEY_STORE:}
+    key-store-password: ${SERVER_SSL_KEY_STORE_PASSWORD:}
+    key-store-type: ${SERVER_SSL_KEY_STORE_TYPE:PKCS12}
+    key-alias: ${SERVER_SSL_KEY_ALIAS:}
 
 spring:
   application:
@@ -21,6 +28,18 @@ spring:
     locations: classpath:db/migration
   cache:
     type: ${CACHE_TYPE:simple}
+  mail:
+    host: ${MAIL_HOST:smtp.gmail.com}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+            required: true
   redis:
     host: ${REDIS_HOST:localhost}
     port: ${REDIS_PORT:6379}
@@ -41,6 +60,8 @@ security:
     expiration-minutes: ${JWT_EXPIRATION_MINUTES:1440}
 
 app:
+  seed:
+    demo-data: ${SEED_DEMO_DATA:false}
   ai:
     provider: ${AI_PROVIDER:llama}
   cors:
@@ -53,3 +74,12 @@ llama:
   api-key: ${LLAMA_API_KEY:${GROQ_API_KEY:}}
   base-url: ${LLAMA_BASE_URL:${GROQ_BASE_URL:https://api.groq.com/openai/v1}}
   model: ${LLAMA_MODEL:${GROQ_MODEL:llama-3.3-70b-versatile}}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,metrics,info
+  endpoint:
+    health:
+      show-details: always

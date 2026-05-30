@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Activity, Brain, CalendarDays, HeartPulse, Smile, Sparkles, Wind } from "lucide-react";
+import { Activity, Brain, CalendarDays, HeartPulse, Smile, Sparkles, Wind, Search } from "lucide-react";
 import AIOutputCard from "../components/AIOutputCard.jsx";
 import { api, apiErrorMessage, isDemo } from "../api/client.js";
 import { mockAIResponse } from "../api/mockData.js";
@@ -64,10 +64,14 @@ export default function MoodStress() {
   const [moods, setMoods] = useState([]);
   const [stress, setStress] = useState([]);
   const [ai, setAi] = useState(null);
-  const [aiLoading, setAiLoading] = useState(false);
+  const [aiTitle, setAiTitle] = useState("AI Mood Analysis");
+  const [aiLoading, setAiLoading] = useState(null);
 
   const [moodForm, setMoodForm] = useState({ moodScore: 7, moodLabel: "steady", journalText: "" });
   const [stressForm, setStressForm] = useState({ stressLevel: 4, trigger: "", copingAction: "" });
+  const [moodMinScore, setMoodMinScore] = useState("");
+  const [filteredMoods, setFilteredMoods] = useState(null);
+  const [moodFilterLoading, setMoodFilterLoading] = useState(false);
 
   useEffect(() => {
     api.getMoodLogs().then((d) => setMoods(d || []));
@@ -82,6 +86,28 @@ export default function MoodStress() {
     () => (stress.length ? (stress.reduce((a, s) => a + (s.stressLevel || 0), 0) / stress.length).toFixed(1) : "-"),
     [stress]
   );
+  const todayMood = useMemo(() => {
+    const todayLogs = moods.filter((mood) => {
+      const date = new Date(mood.loggedAt || mood.createdAt);
+      const today = new Date();
+      return !Number.isNaN(date.getTime())
+        && date.getFullYear() === today.getFullYear()
+        && date.getMonth() === today.getMonth()
+        && date.getDate() === today.getDate();
+    });
+    return todayLogs.length ? (todayLogs.reduce((a, m) => a + (m.moodScore || 0), 0) / todayLogs.length).toFixed(1) : "-";
+  }, [moods]);
+  const todayStress = useMemo(() => {
+    const todayLogs = stress.filter((item) => {
+      const date = new Date(item.loggedAt || item.createdAt);
+      const today = new Date();
+      return !Number.isNaN(date.getTime())
+        && date.getFullYear() === today.getFullYear()
+        && date.getMonth() === today.getMonth()
+        && date.getDate() === today.getDate();
+    });
+    return todayLogs.length ? (todayLogs.reduce((a, s) => a + (s.stressLevel || 0), 0) / todayLogs.length).toFixed(1) : "-";
+  }, [stress]);
 
   const saveMood = async (e) => {
     e.preventDefault();
@@ -106,7 +132,8 @@ export default function MoodStress() {
   };
 
   const analyzeMood = async () => {
-    setAiLoading(true);
+    setAiLoading("mood");
+    setAiTitle("AI Mood Analysis");
     try {
       if (isDemo()) throw new Error("demo");
       const res = await api.aiMood({ logs: moods });
@@ -119,8 +146,50 @@ export default function MoodStress() {
         insights: ["This is a real API error, not demo data."],
       });
     } finally {
-      setAiLoading(false);
+      setAiLoading(null);
     }
+  };
+
+  const analyzeStress = async () => {
+    setAiLoading("stress");
+    setAiTitle("AI Stress Analysis");
+    try {
+      if (isDemo()) throw new Error("demo");
+      const res = await api.aiMood({ stressLogs: stress, focus: "stress check-in" });
+      setAi(res.data);
+    } catch (err) {
+      setAi(isDemo() ? {
+        ...mockAIResponse,
+        summary: "Your stress check-ins are ready to analyze. Log triggers and coping actions to make the pattern clearer.",
+      } : {
+        summary: apiErrorMessage(err, "AI stress analysis failed. Check LLAMA_BASE_URL, LLAMA_MODEL, LLAMA_API_KEY, and backend logs."),
+        recommendations: [],
+        tasks: [],
+        insights: ["This is a real API error, not demo data."],
+      });
+    } finally {
+      setAiLoading(null);
+    }
+  };
+
+  const applyMoodFilter = async (e) => {
+    e.preventDefault();
+    setMoodFilterLoading(true);
+    const minScore = moodMinScore !== "" ? Number(moodMinScore) : undefined;
+    try {
+      const res = await api.searchMoodLogs({ minScore });
+      setFilteredMoods(res.data ?? res);
+    } catch {
+      // Backend nuk është i arritshëm — filtro lokalisht në heshtje
+      setFilteredMoods(moods.filter((m) => !minScore || (m.moodScore || 0) >= minScore));
+    } finally {
+      setMoodFilterLoading(false);
+    }
+  };
+
+  const resetMoodFilter = () => {
+    setMoodMinScore("");
+    setFilteredMoods(null);
   };
 
   return (
@@ -135,17 +204,29 @@ export default function MoodStress() {
           </p>
         </div>
         <div className="wellbeing-score-grid">
-          <div className="wellbeing-score-card mood">
+          <div className="wellbeing-score-card mood today-scope">
+            <Smile size={18} />
+            <span>Today mood</span>
+            <strong>{todayMood}</strong>
+            <small>Resets daily</small>
+          </div>
+          <div className="wellbeing-score-card stress today-scope">
+            <HeartPulse size={18} />
+            <span>Today stress</span>
+            <strong>{todayStress}</strong>
+            <small>Resets daily</small>
+          </div>
+          <div className="wellbeing-score-card mood all-scope">
             <Smile size={18} />
             <span>Average mood</span>
             <strong>{avgMood}</strong>
-            <small>{moods.length} mood logs</small>
+            <small>{moods.length} all-time mood logs</small>
           </div>
-          <div className="wellbeing-score-card stress">
+          <div className="wellbeing-score-card stress all-scope">
             <HeartPulse size={18} />
             <span>Average stress</span>
             <strong>{avgStress}</strong>
-            <small>{stress.length} stress logs</small>
+            <small>{stress.length} all-time stress logs</small>
           </div>
         </div>
       </section>
@@ -188,8 +269,8 @@ export default function MoodStress() {
             </label>
             <div className="row gap">
               <button className="btn btn-primary">Log Mood</button>
-              <button className="btn btn-ai" type="button" onClick={analyzeMood} disabled={aiLoading}>
-                <Sparkles size={14} /> {aiLoading ? "Analyzing..." : "Analyze"}
+              <button className="btn btn-ai" type="button" onClick={analyzeMood} disabled={Boolean(aiLoading)}>
+                <Sparkles size={14} /> {aiLoading === "mood" ? "Analyzing..." : "Analyze"}
               </button>
             </div>
           </form>
@@ -231,21 +312,48 @@ export default function MoodStress() {
                 onChange={(e) => setStressForm({ ...stressForm, copingAction: e.target.value })}
               />
             </label>
-            <button className="btn btn-primary">Log Stress</button>
+            <div className="row gap">
+              <button className="btn btn-primary">Log Stress</button>
+              <button className="btn btn-ai" type="button" onClick={analyzeStress} disabled={Boolean(aiLoading)}>
+                <Sparkles size={14} /> {aiLoading === "stress" ? "Analyzing..." : "Analyze"}
+              </button>
+            </div>
           </form>
         </section>
       </div>
 
-      {ai && <AIOutputCard data={ai} title="AI Mood Analysis" />}
+      {ai && <AIOutputCard data={ai} title={aiTitle} simple hideMeta />}
 
       <div className="wellbeing-history-grid">
         <section className="card wellbeing-history-card">
           <header className="card-head">
             <h3><Brain size={16} /> Mood history</h3>
           </header>
-          {moods.length === 0 ? <div className="empty">No mood logs yet.</div> : (
+          <form className="filter-bar" onSubmit={applyMoodFilter} style={{ marginBottom: "0.75rem" }}>
+            <label className="filter-search" style={{ maxWidth: "160px" }}>
+              <Smile size={15} />
+              <input
+                type="number"
+                min="1"
+                max="10"
+                value={moodMinScore}
+                onChange={(e) => setMoodMinScore(e.target.value)}
+                placeholder="Min score (1–10)"
+              />
+            </label>
+            <button className="btn btn-primary" type="submit" disabled={moodFilterLoading}>
+              <Search size={14} /> {moodFilterLoading ? "Filtering…" : "Filter"}
+            </button>
+            {filteredMoods !== null && (
+              <button className="btn btn-ghost" type="button" onClick={resetMoodFilter}>Clear</button>
+            )}
+          </form>
+          {filteredMoods !== null && (
+            <p className="muted" style={{ marginBottom: "0.5rem" }}>{filteredMoods.length} log{filteredMoods.length !== 1 ? "s" : ""} match</p>
+          )}
+          {(filteredMoods ?? moods).length === 0 ? <div className="empty">No mood logs yet.</div> : (
             <div className="wellbeing-log-stack">
-              {moods.map((m) => {
+              {(filteredMoods ?? moods).map((m) => {
                 const date = formatLogDate(m.loggedAt || m.createdAt);
                 return (
                   <article key={m.id} className="wellbeing-log-card">

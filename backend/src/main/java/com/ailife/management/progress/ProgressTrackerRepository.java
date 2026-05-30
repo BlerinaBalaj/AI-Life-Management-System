@@ -7,4 +7,5 @@ import java.util.List;
 
 public interface ProgressTrackerRepository extends JpaRepository<ProgressTracker, Long> {
     List<ProgressTracker> findByUserIdAndTenantIdAndTrackedDateBetween(Long userId, Long tenantId, LocalDate from, LocalDate to);
+    List<ProgressTracker> findByUserIdAndTenantId(Long userId, Long tenantId);
 }

@@ -1,6 +1,6 @@
-export default function StatCard({ icon: Icon, label, value, accent = "blue", hint }) {
+export default function StatCard({ icon: Icon, label, value, accent = "blue", hint, className = "" }) {
   return (
-    <div className={`stat-card stat-${accent}`}>
+    <div className={`stat-card stat-${accent} ${className}`}>
       <span className="stat-glow" />
       <div className="stat-icon">
         <Icon size={20} />

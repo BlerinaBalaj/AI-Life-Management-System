@@ -2,6 +2,7 @@ package com.ailife.management.auth;
 
 import com.ailife.management.exception.BadRequestException;
 import com.ailife.management.exception.ApiException;
+import com.ailife.management.notification.EmailService;
 import com.ailife.management.security.JwtTokenProvider;
 import com.ailife.management.security.UserPrincipal;
 import com.ailife.management.tenant.Tenant;
@@ -34,6 +35,7 @@ public class AuthService {
     private final TenantRepository tenantRepository;
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
+    private final EmailService emailService;
 
     @Transactional
     public AuthResponse register(RegisterRequest request) {
@@ -64,6 +66,7 @@ public class AuthService {
         user.setProfile(profile);
 
         User saved = userRepository.save(user);
+        emailService.sendWelcomeEmail(saved);
         return createResponse(new UserPrincipal(saved), saved);
     }
 

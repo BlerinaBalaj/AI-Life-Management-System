@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   Sparkles, Apple, Beef, Wheat, Droplet, Plus, X, PlayCircle,
-  CheckCircle2, CalendarDays, Flame, Utensils, Leaf,
+  CheckCircle2, CalendarDays, Flame, Utensils, Leaf, Search,
 } from "lucide-react";
 import StatCard from "../components/StatCard.jsx";
 import AIOutputCard from "../components/AIOutputCard.jsx";
@@ -25,7 +25,21 @@ const PLAN_DETAILS = {
     meals: ["Egg white breakfast bowl", "Grilled chicken salad", "Protein shake", "Lean fish and greens"],
     tips: ["Protein first, sauces last.", "Choose high-volume vegetables.", "Keep one planned snack ready."],
   },
+  "steady energy day": {
+    focus: "A simple focus-day plan built to avoid heavy meals and afternoon crashes.",
+    rhythm: "Breakfast, lunch, snack and light dinner",
+    macros: "Protein 125g / Carbs 230g / Fat 65g",
+    bestFor: "Energy, studying, work days",
+    meals: ["Avocado egg toast", "Chicken rice bowl", "Greek yogurt bowl", "Simple salmon dinner"],
+    tips: ["Eat breakfast with protein.", "Keep lunch colorful but not too heavy.", "Use a snack before energy drops."],
+  },
 };
+
+const STARTER_NUTRITION_PLANS = [
+  { id: "starter-balanced", title: "Balanced 2200 kcal", description: "Whole foods, balanced macros.", dailyCalories: 2200, goal: "Maintain" },
+  { id: "starter-protein", title: "High Protein Cut", description: "Protein-forward meals for fat loss.", dailyCalories: 1900, goal: "Cut" },
+  { id: "starter-steady", title: "Steady Energy Day", description: "Simple meals for focus, hydration and no afternoon crash.", dailyCalories: 2100, goal: "Energy" },
+];
 
 const FOOD_PRESETS = [
   {
@@ -96,6 +110,48 @@ function getPlanDetails(plan) {
   };
 }
 
+function presetFromMealName(mealName, fallbackMealType = "BREAKFAST") {
+  const normalized = String(mealName || "").toLowerCase();
+  const direct = FOOD_PRESETS.find((preset) => {
+    const name = preset.foodName.toLowerCase();
+    return normalized.includes(name) || name.includes(normalized);
+  });
+  if (direct) return direct;
+
+  if (normalized.includes("oat") || normalized.includes("breakfast")) return FOOD_PRESETS[0];
+  if (normalized.includes("chicken") || normalized.includes("salad") || normalized.includes("lunch")) return FOOD_PRESETS[1];
+  if (normalized.includes("smoothie") || normalized.includes("snack") || normalized.includes("yogurt")) return FOOD_PRESETS[2];
+  if (normalized.includes("salmon") || normalized.includes("quinoa") || normalized.includes("dinner")) return FOOD_PRESETS[3];
+  if (normalized.includes("egg") || normalized.includes("toast")) return FOOD_PRESETS[4];
+
+  return {
+    foodName: mealName || "Balanced meal",
+    mealType: fallbackMealType,
+    calories: 430,
+    proteinGrams: 28,
+    carbsGrams: 45,
+    fatGrams: 14,
+  };
+}
+
+function presetForPlan(plan, details) {
+  const key = String(plan?.title || "").toLowerCase();
+  if (key.includes("high protein")) return FOOD_PRESETS[1];
+  if (key.includes("steady energy")) return FOOD_PRESETS[4];
+  if (key.includes("balanced")) return FOOD_PRESETS[3];
+  return presetFromMealName(details.meals[0] || plan?.title || "Balanced meal");
+}
+
+function isToday(value) {
+  if (!value) return false;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return false;
+  const today = new Date();
+  return date.getFullYear() === today.getFullYear()
+    && date.getMonth() === today.getMonth()
+    && date.getDate() === today.getDate();
+}
+
 function formatFoodDate(value) {
   if (!value) return { label: "No date", weekday: "--", day: "--", month: "", time: "" };
   const date = new Date(value);
@@ -123,6 +179,10 @@ export default function Nutrition() {
   const [aiLoading, setAiLoading] = useState(false);
   const [show, setShow] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState(null);
+  const [nutritionFilters, setNutritionFilters] = useState({ query: "", maxCalories: "" });
+  const [filteredPlans, setFilteredPlans] = useState(null);
+  const [nutritionFiltering, setNutritionFiltering] = useState(false);
+  const [nutritionFilterError, setNutritionFilterError] = useState("");
   const [form, setForm] = useState({
     foodName: "",
     mealType: "BREAKFAST",
@@ -150,12 +210,68 @@ export default function Nutrition() {
     );
   }, [logs]);
 
+  const todayTotals = useMemo(() => {
+    return logs.filter((log) => isToday(log.consumedAt)).reduce(
+      (a, l) => ({
+        calories: a.calories + (l.calories || 0),
+        protein: a.protein + (l.proteinGrams || 0),
+        carbs: a.carbs + (l.carbsGrams || 0),
+        fat: a.fat + (l.fatGrams || 0),
+      }),
+      { calories: 0, protein: 0, carbs: 0, fat: 0 }
+    );
+  }, [logs]);
+
+  const starterPlanTitles = new Set(STARTER_NUTRITION_PLANS.map((plan) => plan.title.toLowerCase()));
+  const displayPlans = [
+    ...STARTER_NUTRITION_PLANS,
+    ...plans.filter((plan) => !starterPlanTitles.has(String(plan.title || "").toLowerCase())),
+  ];
+
+  const applyNutritionFilters = async (e) => {
+    e.preventDefault();
+    setNutritionFiltering(true);
+    setNutritionFilterError("");
+    const query = nutritionFilters.query.trim();
+    const maxCalories = nutritionFilters.maxCalories ? Number(nutritionFilters.maxCalories) : undefined;
+    try {
+      const res = await api.searchNutrition({ query, maxCalories });
+      setFilteredPlans(res.data ?? res);
+    } catch (err) {
+      setNutritionFilterError(apiErrorMessage(err, "Search failed. Showing local filter instead."));
+      const needle = query.toLowerCase();
+      setFilteredPlans(displayPlans.filter((p) => {
+        const matchText = !needle || (p.title || "").toLowerCase().includes(needle) || (p.description || "").toLowerCase().includes(needle);
+        const matchCal = !maxCalories || (p.dailyCalories || 0) <= maxCalories;
+        return matchText && matchCal;
+      }));
+    } finally {
+      setNutritionFiltering(false);
+    }
+  };
+
+  const resetNutritionFilters = () => {
+    setNutritionFilters({ query: "", maxCalories: "" });
+    setFilteredPlans(null);
+    setNutritionFilterError("");
+  };
+
+  const upsertNutritionPlan = (plan) => {
+    if (!plan) return;
+    setPlans((current) => {
+      const exists = current.some((item) => item.id === plan.id);
+      if (exists) return current.map((item) => (item.id === plan.id ? plan : item));
+      return [plan, ...current];
+    });
+  };
+
   const askAI = async () => {
     setAiLoading(true);
     try {
       if (isDemo()) throw new Error("demo");
       const res = await api.aiNutrition({});
       setAi(res.data);
+      upsertNutritionPlan(res.data?.nutritionPlan);
     } catch (err) {
       setAi(isDemo() ? mockAIResponse : {
         summary: apiErrorMessage(err, "AI nutrition suggestion failed. Check LLAMA_BASE_URL, LLAMA_MODEL, LLAMA_API_KEY, and backend logs."),
@@ -187,16 +303,45 @@ export default function Nutrition() {
     });
   };
 
+  const logFoodFromPlan = (plan, details) => {
+    chooseFood(presetForPlan(plan, details));
+    setSelectedPlan(null);
+    setShow(true);
+  };
+
   const selectedDetails = selectedPlan ? getPlanDetails(selectedPlan) : null;
 
   return (
     <div className="grid-stack">
-      <div className="grid-4">
-        <StatCard icon={Apple} label="Calories" value={totals.calories} accent="green" />
-        <StatCard icon={Beef} label="Protein (g)" value={totals.protein} accent="blue" />
-        <StatCard icon={Wheat} label="Carbs (g)" value={totals.carbs} accent="green" />
-        <StatCard icon={Droplet} label="Fat (g)" value={totals.fat} accent="blue" />
-      </div>
+      <section className="card daily-track-card">
+        <header className="card-head">
+          <div>
+            <h3>Today&apos;s nutrition</h3>
+            <p className="muted">Resets each day and fills as you log food.</p>
+          </div>
+        </header>
+        <div className="grid-4 today-stats">
+          <StatCard icon={Apple} label="Today calories" value={todayTotals.calories} accent="green" hint="Resets at midnight" />
+          <StatCard icon={Beef} label="Today protein" value={todayTotals.protein} accent="blue" hint="Today's grams" />
+          <StatCard icon={Wheat} label="Today carbs" value={todayTotals.carbs} accent="green" hint="Today's grams" />
+          <StatCard icon={Droplet} label="Today fat" value={todayTotals.fat} accent="blue" hint="Today's grams" />
+        </div>
+      </section>
+
+      <section className="card all-time-panel">
+        <header className="card-head">
+          <div>
+            <h3>All-time nutrition</h3>
+            <p className="muted">A quieter summary of every meal you have logged.</p>
+          </div>
+        </header>
+        <div className="grid-4 all-time-stats">
+          <StatCard icon={Apple} label="All calories" value={totals.calories} accent="green" hint="Every logged meal" />
+          <StatCard icon={Beef} label="All protein" value={totals.protein} accent="blue" hint="Total grams logged" />
+          <StatCard icon={Wheat} label="All carbs" value={totals.carbs} accent="green" hint="Total grams logged" />
+          <StatCard icon={Droplet} label="All fat" value={totals.fat} accent="blue" hint="Total grams logged" />
+        </div>
+      </section>
 
       <section className="card row-between">
         <div>
@@ -213,7 +358,7 @@ export default function Nutrition() {
         </div>
       </section>
 
-      {ai && <AIOutputCard data={ai} title="AI Nutrition Suggestion" />}
+      {ai && <AIOutputCard data={ai} title="AI Nutrition Suggestion" simple />}
 
       <section className="card nutrition-plan-section">
         <header className="card-head">
@@ -222,9 +367,40 @@ export default function Nutrition() {
             <p className="muted">Click a plan to see meal rhythm, macros and food ideas.</p>
           </div>
         </header>
-        {plans.length === 0 ? <div className="empty">No plans available.</div> : (
-          <div className="grid-3">
-            {plans.map((p) => (
+        <form className="filter-bar" onSubmit={applyNutritionFilters} style={{ marginBottom: "1rem" }}>
+          <label className="filter-search">
+            <Search size={15} />
+            <input
+              value={nutritionFilters.query}
+              onChange={(e) => setNutritionFilters({ ...nutritionFilters, query: e.target.value })}
+              placeholder="Search nutrition plans…"
+            />
+          </label>
+          <label className="filter-search" style={{ maxWidth: "160px" }}>
+            <Flame size={15} />
+            <input
+              type="number"
+              min="0"
+              value={nutritionFilters.maxCalories}
+              onChange={(e) => setNutritionFilters({ ...nutritionFilters, maxCalories: e.target.value })}
+              placeholder="Max kcal/day"
+            />
+          </label>
+          <button className="btn btn-primary" type="submit" disabled={nutritionFiltering}>
+            <Search size={14} /> {nutritionFiltering ? "Searching…" : "Search"}
+          </button>
+          {filteredPlans !== null && (
+            <button className="btn btn-ghost" type="button" onClick={resetNutritionFilters}>Clear</button>
+          )}
+        </form>
+        {nutritionFilterError && <div className="filter-error" style={{ marginBottom: "0.5rem" }}>{nutritionFilterError}</div>}
+        {filteredPlans !== null && (
+          <p className="muted" style={{ marginBottom: "0.75rem" }}>
+            {filteredPlans.length} result{filteredPlans.length !== 1 ? "s" : ""} found
+          </p>
+        )}
+        <div className="grid-3">
+            {(filteredPlans ?? displayPlans).map((p) => (
               <button key={p.id} className="mini-card nutrition-plan-card" type="button" onClick={() => setSelectedPlan(p)}>
                 <div className="mini-icon"><Apple size={18} /></div>
                 <strong>{p.title}</strong>
@@ -237,7 +413,6 @@ export default function Nutrition() {
               </button>
             ))}
           </div>
-        )}
       </section>
 
       <section className="card food-log-section">
@@ -309,7 +484,7 @@ export default function Nutrition() {
                 </div>
               ))}
             </div>
-            <button className="btn btn-primary workout-log-plan" type="button" onClick={() => { setSelectedPlan(null); setShow(true); }}>
+            <button className="btn btn-primary workout-log-plan" type="button" onClick={() => logFoodFromPlan(selectedPlan, selectedDetails)}>
               <CheckCircle2 size={15} /> Log food from this plan
             </button>
           </div>

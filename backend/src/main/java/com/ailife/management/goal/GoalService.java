@@ -3,10 +3,14 @@ package com.ailife.management.goal;
 import com.ailife.management.category.CategoryRepository;
 import com.ailife.management.common.CurrentUserService;
 import com.ailife.management.common.DtoMapper;
+import com.ailife.management.common.PagedResponse;
 import com.ailife.management.common.RequestReader;
 import com.ailife.management.exception.ResourceNotFoundException;
 import com.ailife.management.user.User;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,6 +32,18 @@ public class GoalService {
                 ? goalRepository.findByUserIdAndTenantId(user.getId(), user.getTenant().getId())
                 : goalRepository.findByUserIdAndTenantIdAndStatusIgnoreCase(user.getId(), user.getTenant().getId(), status);
         return goals.stream().map(DtoMapper::goal).collect(Collectors.toList());
+    }
+
+    @Transactional(readOnly = true)
+    public Map<String, Object> listPaged(String status, int page, int size) {
+        User user = currentUserService.requireUser();
+        PageRequest pageRequest = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+        Page<Goal> goalPage = goalRepository.findByUserIdAndTenantId(user.getId(), user.getTenant().getId(), pageRequest);
+        List<Map<String, Object>> content = goalPage.getContent().stream()
+                .filter(g -> status == null || g.getStatus().equalsIgnoreCase(status))
+                .map(DtoMapper::goal)
+                .collect(Collectors.toList());
+        return PagedResponse.of(content, page, size, goalPage.getTotalElements());
     }
 
     @Transactional

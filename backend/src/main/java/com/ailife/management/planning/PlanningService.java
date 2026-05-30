@@ -2,12 +2,16 @@ package com.ailife.management.planning;
 
 import com.ailife.management.common.CurrentUserService;
 import com.ailife.management.common.DtoMapper;
+import com.ailife.management.common.PagedResponse;
 import com.ailife.management.common.RequestReader;
 import com.ailife.management.exception.ResourceNotFoundException;
 import com.ailife.management.user.User;
 import lombok.RequiredArgsConstructor;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -73,6 +77,18 @@ public class PlanningService {
                 .filter(task -> status == null || task.getStatus().equalsIgnoreCase(status))
                 .map(DtoMapper::task)
                 .collect(Collectors.toList());
+    }
+
+    @Transactional(readOnly = true)
+    public Map<String, Object> tasksPaged(String status, int page, int size) {
+        User user = currentUserService.requireUser();
+        PageRequest pageRequest = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+        Page<Task> taskPage = taskRepository.findByUserIdAndTenantId(user.getId(), user.getTenant().getId(), pageRequest);
+        List<Map<String, Object>> content = taskPage.getContent().stream()
+                .filter(task -> status == null || task.getStatus().equalsIgnoreCase(status))
+                .map(DtoMapper::task)
+                .collect(Collectors.toList());
+        return PagedResponse.of(content, page, size, taskPage.getTotalElements());
     }
 
     @Transactional

@@ -7,4 +7,5 @@ import java.util.List;
 
 public interface FoodLogRepository extends JpaRepository<FoodLog, Long> {
     List<FoodLog> findByUserIdAndTenantIdAndConsumedAtBetween(Long userId, Long tenantId, LocalDateTime from, LocalDateTime to);
+    List<FoodLog> findByUserIdAndTenantId(Long userId, Long tenantId);
 }

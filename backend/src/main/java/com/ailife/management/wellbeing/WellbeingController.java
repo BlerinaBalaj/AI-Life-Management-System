@@ -29,6 +29,14 @@ public class WellbeingController {
         return wellbeingService.moodLogs(minScore, maxScore);
     }
 
+    @Operation(summary = "List mood logs with pagination (page=0, size=20). Returns content + pagination metadata.")
+    @GetMapping("/mood-logs/paged")
+    public Map<String, Object> moodLogsPaged(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        return wellbeingService.moodLogsPaged(page, size);
+    }
+
     @Operation(summary = "Create a mood log")
     @PostMapping("/mood-logs")
     @ResponseStatus(HttpStatus.CREATED)

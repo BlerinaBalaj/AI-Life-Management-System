@@ -5,12 +5,14 @@ import com.ailife.management.common.DtoMapper;
 import com.ailife.management.common.RequestReader;
 import com.ailife.management.exception.ResourceNotFoundException;
 import com.ailife.management.fitness.FitnessService;
+import com.ailife.management.notification.EmailService;
 import com.ailife.management.nutrition.NutritionService;
 import com.ailife.management.planning.PlanningService;
 import com.ailife.management.user.User;
 import com.ailife.management.user.UserRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -23,6 +25,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class AiService {
@@ -37,6 +40,7 @@ public class AiService {
     private final FitnessService fitnessService;
     private final NutritionService nutritionService;
     private final UserRepository userRepository;
+    private final EmailService emailService;
     private final ObjectMapper objectMapper;
 
     @Transactional
@@ -136,25 +140,51 @@ public class AiService {
     @Async
     @Transactional
     public void generateWeeklyReportAsync(Long userId) {
-        User user = currentUserServiceForBackground(userId);
-        Map<String, Object> input = Map.of("reason", "scheduled-background-job");
-        Map<String, Object> response = execute("WEEKLY_REPORT_BACKGROUND", input, user);
+        User user;
+        try {
+            user = currentUserServiceForBackground(userId);
+        } catch (Exception ex) {
+            log.error("[AI Background] User {} not found: {}", userId, ex.getMessage());
+            return;
+        }
+
         LocalDate start = LocalDate.now().minusDays(7);
         LocalDate end = LocalDate.now();
-        AIReport report = reportRepository.findByUserIdAndTenantIdAndReportTypeAndPeriodStartAndPeriodEnd(
-                        user.getId(), user.getTenant().getId(), "WEEKLY_BACKGROUND", start, end)
-                .orElseGet(() -> {
-                    AIReport newReport = new AIReport();
-                    newReport.setTenant(user.getTenant());
-                    newReport.setUser(user);
-                    newReport.setPeriodStart(start);
-                    newReport.setPeriodEnd(end);
-                    newReport.setReportType("WEEKLY_BACKGROUND");
-                    return newReport;
-                });
-        report.setStatus("READY");
-        report.setContentJson(String.valueOf(response.get("output")));
-        reportRepository.save(report);
+        String content;
+
+        try {
+            Map<String, Object> input = Map.of("reason", "scheduled-background-job");
+            Map<String, Object> response = execute("WEEKLY_REPORT_BACKGROUND", input, user);
+            content = String.valueOf(response.get("output"));
+        } catch (Exception ex) {
+            String reason = ex.getMessage() != null && ex.getMessage().contains("429") ? "rate limit" : ex.getMessage();
+            log.warn("[AI Background] AI generation failed for user {} ({}) — {} — duke dërguar fallback email.",
+                    user.getId(), user.getEmail(), reason);
+            content = "{\"summary\":\"Your weekly report could not be generated automatically this week. "
+                    + "Please open the AI Reports section to generate it manually.\",\"insights\":[]}";
+        }
+
+        try {
+            AIReport report = reportRepository.findByUserIdAndTenantIdAndReportTypeAndPeriodStartAndPeriodEnd(
+                            user.getId(), user.getTenant().getId(), "WEEKLY_BACKGROUND", start, end)
+                    .orElseGet(() -> {
+                        AIReport newReport = new AIReport();
+                        newReport.setTenant(user.getTenant());
+                        newReport.setUser(user);
+                        newReport.setPeriodStart(start);
+                        newReport.setPeriodEnd(end);
+                        newReport.setReportType("WEEKLY_BACKGROUND");
+                        return newReport;
+                    });
+            report.setStatus("READY");
+            report.setContentJson(content);
+            reportRepository.save(report);
+        } catch (Exception ex) {
+            log.error("[AI Background] Failed to save report for user {}: {}", user.getId(), ex.getMessage());
+        }
+
+        // Dërgo email gjithmonë — edhe nëse AI dështoi
+        emailService.sendWeeklyReportReadyEmail(user, content);
     }
 
     private User currentUserServiceForBackground(Long userId) {
@@ -232,16 +262,16 @@ public class AiService {
             error = ex.getMessage();
             throw ex;
         } finally {
-            AIRequestLog log = new AIRequestLog();
-            log.setTenant(user.getTenant());
-            log.setUser(user);
-            log.setRequestType(requestType);
-            log.setModel(aiClient.getProvider() + ":" + aiClient.getModel());
-            log.setInputJson(inputJson);
-            log.setOutputJson(outputJson);
-            log.setSuccessful(success);
-            log.setErrorMessage(error);
-            requestLogRepository.save(log);
+            AIRequestLog requestLog = new AIRequestLog();
+            requestLog.setTenant(user.getTenant());
+            requestLog.setUser(user);
+            requestLog.setRequestType(requestType);
+            requestLog.setModel(aiClient.getProvider() + ":" + aiClient.getModel());
+            requestLog.setInputJson(inputJson);
+            requestLog.setOutputJson(outputJson);
+            requestLog.setSuccessful(success);
+            requestLog.setErrorMessage(error);
+            requestLogRepository.save(requestLog);
         }
     }
 

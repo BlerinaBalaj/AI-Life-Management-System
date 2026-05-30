@@ -36,5 +36,7 @@ jobs:
           node-version: '22'
       - name: Install dependencies
         run: npm install
+      - name: Run frontend tests with coverage
+        run: npm run test:coverage
       - name: Build frontend
         run: npm run build

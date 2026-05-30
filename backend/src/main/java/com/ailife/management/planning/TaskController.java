@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 import java.util.Map;
+import java.util.LinkedHashMap;
 
 @RestController
 @RequiredArgsConstructor
@@ -29,6 +30,15 @@ public class TaskController {
     @GetMapping
     public List<Map<String, Object>> list(@RequestParam(required = false) String status) {
         return planningService.tasks(status);
+    }
+
+    @Operation(summary = "List tasks with pagination (page=0, size=20). Returns content + pagination metadata.")
+    @GetMapping("/paged")
+    public Map<String, Object> listPaged(
+            @RequestParam(required = false) String status,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        return planningService.tasksPaged(status, page, size);
     }
 
     @Operation(summary = "Create a task")

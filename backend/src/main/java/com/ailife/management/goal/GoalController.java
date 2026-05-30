@@ -31,6 +31,15 @@ public class GoalController {
         return goalService.list(status);
     }
 
+    @Operation(summary = "List goals with pagination (page=0, size=20). Returns content + pagination metadata.")
+    @GetMapping("/paged")
+    public Map<String, Object> listPaged(
+            @RequestParam(required = false) String status,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        return goalService.listPaged(status, page, size);
+    }
+
     @Operation(summary = "Create a goal")
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)

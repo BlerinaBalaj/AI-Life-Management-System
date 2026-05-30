@@ -2,9 +2,13 @@ package com.ailife.management.wellbeing;
 
 import com.ailife.management.common.CurrentUserService;
 import com.ailife.management.common.DtoMapper;
+import com.ailife.management.common.PagedResponse;
 import com.ailife.management.common.RequestReader;
 import com.ailife.management.user.User;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -30,6 +34,17 @@ public class WellbeingService {
                 .filter(log -> maxScore == null || log.getMoodScore() <= maxScore)
                 .map(DtoMapper::moodLog)
                 .collect(Collectors.toList());
+    }
+
+    @Transactional(readOnly = true)
+    public Map<String, Object> moodLogsPaged(int page, int size) {
+        User user = currentUserService.requireUser();
+        PageRequest pageRequest = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "loggedAt"));
+        Page<MoodLog> logPage = moodLogRepository.findByUserIdAndTenantId(user.getId(), user.getTenant().getId(), pageRequest);
+        List<Map<String, Object>> content = logPage.getContent().stream()
+                .map(DtoMapper::moodLog)
+                .collect(Collectors.toList());
+        return PagedResponse.of(content, page, size, logPage.getTotalElements());
     }
 
     @Transactional

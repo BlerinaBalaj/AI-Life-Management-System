@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Sparkles, Dumbbell, Flame, Clock, Activity, Plus, X, PlayCircle, CheckCircle2, CalendarDays } from "lucide-react";
+import { Sparkles, Dumbbell, Flame, Clock, Activity, Plus, X, PlayCircle, CheckCircle2, CalendarDays, Search } from "lucide-react";
 import StatCard from "../components/StatCard.jsx";
 import AIOutputCard from "../components/AIOutputCard.jsx";
 import { api, apiErrorMessage, isDemo } from "../api/client.js";
@@ -155,6 +155,10 @@ export default function Fitness() {
   const [aiLoading, setAiLoading] = useState(false);
   const [showLog, setShowLog] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState(null);
+  const [workoutFilters, setWorkoutFilters] = useState({ query: "", difficulty: "" });
+  const [filteredWorkouts, setFilteredWorkouts] = useState(null);
+  const [workoutFiltering, setWorkoutFiltering] = useState(false);
+  const [workoutFilterError, setWorkoutFilterError] = useState("");
   const [form, setForm] = useState({
     workoutTitle: "",
     startedAt: new Date().toISOString().slice(0, 16),
@@ -188,6 +192,34 @@ export default function Fitness() {
     ...STARTER_WORKOUTS,
     ...workouts.filter((workout) => !starterTitles.has(String(workout.title || "").toLowerCase())),
   ];
+
+  const applyWorkoutFilters = async (e) => {
+    e.preventDefault();
+    setWorkoutFiltering(true);
+    setWorkoutFilterError("");
+    const query = workoutFilters.query.trim();
+    const difficulty = workoutFilters.difficulty || undefined;
+    try {
+      const res = await api.searchWorkouts({ query, difficulty });
+      setFilteredWorkouts(res.data ?? res);
+    } catch (err) {
+      setWorkoutFilterError(apiErrorMessage(err, "Search failed. Showing local filter instead."));
+      const needle = query.toLowerCase();
+      setFilteredWorkouts(displayWorkouts.filter((w) => {
+        const matchText = !needle || (w.title || "").toLowerCase().includes(needle) || (w.description || "").toLowerCase().includes(needle);
+        const matchDiff = !difficulty || (w.difficulty || "").toUpperCase() === difficulty.toUpperCase();
+        return matchText && matchDiff;
+      }));
+    } finally {
+      setWorkoutFiltering(false);
+    }
+  };
+
+  const resetWorkoutFilters = () => {
+    setWorkoutFilters({ query: "", difficulty: "" });
+    setFilteredWorkouts(null);
+    setWorkoutFilterError("");
+  };
 
   const upsertWorkoutPlan = (plan) => {
     if (!plan) return;
@@ -299,8 +331,38 @@ export default function Fitness() {
             <p className="muted">Click a plan to view exercises, then log it as today&apos;s session.</p>
           </div>
         </header>
+        <form className="filter-bar" onSubmit={applyWorkoutFilters} style={{ marginBottom: "1rem" }}>
+          <label className="filter-search">
+            <Search size={15} />
+            <input
+              value={workoutFilters.query}
+              onChange={(e) => setWorkoutFilters({ ...workoutFilters, query: e.target.value })}
+              placeholder="Search workout plans…"
+            />
+          </label>
+          <label className="filter-select">
+            <select value={workoutFilters.difficulty} onChange={(e) => setWorkoutFilters({ ...workoutFilters, difficulty: e.target.value })}>
+              <option value="">All difficulties</option>
+              <option value="BEGINNER">Beginner</option>
+              <option value="INTERMEDIATE">Intermediate</option>
+              <option value="ADVANCED">Advanced</option>
+            </select>
+          </label>
+          <button className="btn btn-primary" type="submit" disabled={workoutFiltering}>
+            <Search size={14} /> {workoutFiltering ? "Searching…" : "Search"}
+          </button>
+          {filteredWorkouts !== null && (
+            <button className="btn btn-ghost" type="button" onClick={resetWorkoutFilters}>Clear</button>
+          )}
+        </form>
+        {workoutFilterError && <div className="filter-error" style={{ marginBottom: "0.5rem" }}>{workoutFilterError}</div>}
+        {filteredWorkouts !== null && (
+          <p className="muted" style={{ marginBottom: "0.75rem" }}>
+            {filteredWorkouts.length} result{filteredWorkouts.length !== 1 ? "s" : ""} found
+          </p>
+        )}
         <div className="grid-3">
-          {displayWorkouts.map((w) => (
+          {(filteredWorkouts ?? displayWorkouts).map((w) => (
             <WorkoutPlanCard key={w.id} workout={w} onSelect={() => setSelectedPlan(w)} />
           ))}
         </div>
