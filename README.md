@@ -14,7 +14,7 @@ Kur i pyet AI-n *"Pse po ndihem i lodhur këtë javë?"*, ai nuk merr me mend. N
 
 ---
 
-## 🛠 Stack Teknologjik
+## Stack Teknologjik
 
 ### Backend
 - **Spring Boot 2.7.18** — framework kryesor
