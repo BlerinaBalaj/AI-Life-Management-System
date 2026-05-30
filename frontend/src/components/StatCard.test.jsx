@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { render } from "vitest-browser-react";
+import { render } from "@testing-library/react";
 import { Activity } from "lucide-react";
 import StatCard from "./StatCard.jsx";
 
